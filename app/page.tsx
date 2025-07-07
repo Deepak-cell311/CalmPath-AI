@@ -451,7 +451,7 @@ export default function PatientInterface() {
     try {
       console.log("Sending message to AI:", message)
 
-      const response = await fetch("http://localhost:5000/api/chat", {
+      const response = await fetch("https://calmpath-ai-backend.onrender.com/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
