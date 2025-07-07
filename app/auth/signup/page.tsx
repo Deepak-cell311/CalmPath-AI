@@ -51,7 +51,7 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      const response = await fetch("https://calmpathai.onrender.com/api/auth/signup", {
+      const response = await fetch("https://calmpath-ai-backend.onrender.com/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
