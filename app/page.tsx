@@ -63,6 +63,7 @@ export default function PatientInterface() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(false)
   const [currentTranscript, setCurrentTranscript] = useState("")
+  const transcriptRef = useRef("");
   const [showTextInput, setShowTextInput] = useState(false)
   const [textInput, setTextInput] = useState("")
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null)
@@ -137,6 +138,11 @@ export default function PatientInterface() {
     }
   }, [currentActivity, peacefulImages.length])
 
+  // Update transcriptRef whenever currentTranscript changes
+  useEffect(() => {
+    transcriptRef.current = currentTranscript;
+  }, [currentTranscript]);
+
   // Initialize Speech Recognition with better permission handling
   const initializeSpeechRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -151,6 +157,7 @@ export default function PatientInterface() {
       console.log("Speech recognition started")
       setIsListening(true)
       setCurrentTranscript("")
+      transcriptRef.current = ""
     }
 
     recognitionRef.current.onresult = (event: any) => {
@@ -166,16 +173,16 @@ export default function PatientInterface() {
         }
       }
 
-      // Only show interim results, don't process them
-      setCurrentTranscript(interimTranscript || finalTranscript)
-
-      // Don't automatically process final results - wait for user to stop
+      const transcriptToShow = interimTranscript || finalTranscript;
+      setCurrentTranscript(transcriptToShow);
+      transcriptRef.current = transcriptToShow;
     }
 
     recognitionRef.current.onerror = (event: any) => {
       console.error("Speech recognition error:", event.error)
       setIsListening(false)
       setCurrentTranscript("")
+      transcriptRef.current = ""
 
       let errorMessage = "I'm having trouble hearing you. "
       switch (event.error) {
@@ -200,13 +207,15 @@ export default function PatientInterface() {
 
     recognitionRef.current.onend = () => {
       console.log("Speech recognition ended")
-      const finalText = currentTranscript.trim()
+      const finalText = transcriptRef.current.trim()
+      console.log("Final transcript on end:", finalText);
       if (finalText && finalText.length > 1) {
         // Process the complete speech when recognition ends
         handleSpeechResult(finalText)
       }
       setIsListening(false)
       setCurrentTranscript("")
+      transcriptRef.current = ""
     }
   }
 
@@ -344,6 +353,7 @@ export default function PatientInterface() {
 
   // Handle speech recognition result
   const handleSpeechResult = async (transcript: string) => {
+    console.log("handleSpeechResult called with:", transcript);
     if (!transcript || transcript.length < 2) {
       return // Ignore very short or empty results
     }
@@ -437,10 +447,11 @@ export default function PatientInterface() {
 
   // Get AI response using OpenAI API
   const getAIResponse = async (message: string): Promise<{ response: string; photos?: MemoryPhoto[] }> => {
+    console.log("getAIResponse called with:", message);
     try {
       console.log("Sending message to AI:", message)
 
-      const response = await fetch("/api/chat", {
+      const response = await fetch("http://localhost:5000/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -838,9 +849,9 @@ export default function PatientInterface() {
               </div>
             </div>
           </div>
-          <div className="text-center text-sm text-gray-500 pb-4">
+          {/* <div className="text-center text-sm text-gray-500 pb-4">
             Caregiver mode: {caregiverMode ? "Active" : "Inactive"} • Session: 0 min
-          </div>
+          </div> */}
         </div>
       </div>
     )
@@ -944,9 +955,9 @@ export default function PatientInterface() {
               </div>
             </div>
           </div>
-          <div className="text-center text-sm text-gray-500 pb-4">
+          {/* <div className="text-center text-sm text-gray-500 pb-4">
             Caregiver mode: {caregiverMode ? "Active" : "Inactive"} • Session: 0 min
-          </div>
+          </div> */}
         </div>
       </div>
     )
@@ -1294,7 +1305,7 @@ export default function PatientInterface() {
           >
             <Type className="w-4 h-4" />
           </Button>
-          <div className="flex items-center gap-2">
+          {/* <div className="flex items-center gap-2">
             <span className="text-sm text-gray-600">Caregiver mode:</span>
             <Button
               variant={caregiverMode ? "default" : "outline"}
@@ -1304,7 +1315,7 @@ export default function PatientInterface() {
               {caregiverMode ? "Active" : "Inactive"}
             </Button>
             <span className="text-sm text-gray-500">Session: 0 min</span>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>
