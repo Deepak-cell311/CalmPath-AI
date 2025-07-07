@@ -62,7 +62,7 @@ export default function FamilyDashboard() {
     const formData = new FormData();
      
     try {
-      const response = await fetch("http://localhost:5000/api/family/memoryPhotos", {
+      const response = await fetch("https://calmpathai.onrender.com/api/family/memoryPhotos", {
         method: "POST",
         body: formData,
         credentials: "include", // if using session/cookie auth
@@ -109,7 +109,7 @@ export default function FamilyDashboard() {
 
   const fetchExistingPhotos = async () => {
     try {
-      const response = await fetch("http://localhost:5000/api/family/memoryPhotos", {
+      const response = await fetch("https://calmpathai.onrender.com/api/family/memoryPhotos", {
         method: "GET",
         credentials: "include",
       });
