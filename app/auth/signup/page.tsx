@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Heart, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import "dotenv/config"
 
 export default function SignupPage() {
   const [userType, setUserType] = useState<"Patient" | "Family Member" | "Facility Staff" | "">("")
@@ -51,7 +51,7 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      const response = await fetch("https://calmpath-ai-backend.onrender.com/api/auth/signup", {
+      const response = await fetch(`${process.env.API_URL}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -60,18 +60,18 @@ export default function SignupPage() {
           lastName: formData.lastName,
           email: formData.email,
           password: formData.password,
-          phoneNumber: formData.phoneNumber, 
+          phoneNumber: formData.phoneNumber,
           confirmPassword: formData.confirmPassword,
           relationshipToPatient: userType === "Family Member" ? formData.relationship : undefined,
           patientAccessCode: userType === "Family Member" ? formData.patientCode : undefined,
           facilityName: userType === "Facility Staff" ? formData.facilityName : undefined,
-          facilityId: userType === "Facility Staff" ? formData.facilityName : undefined,
+          facilityId: userType === "Facility Staff" ? formData.facilityId : undefined,
         }),
       });
 
       const result = await response.json();
       console.log("Result: ", result);
-      
+
 
       if (!response.ok) {
         // Show first error if available
@@ -182,7 +182,7 @@ export default function SignupPage() {
               </div>
 
               {/* Conditional fields based on user type */}
-              {userType === "Facility Staff" && (
+              {userType === "Facility Staff" && (<>
                 <div className="space-y-2">
                   <Label htmlFor="facilityName">Facility Name</Label>
                   <Input
@@ -193,6 +193,16 @@ export default function SignupPage() {
                     required
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="facilityName">Facility Id</Label>
+                  <Input
+                    id="facilityId"
+                    placeholder="Enter facility Id"
+                    value={formData.facilityId}
+                    onChange={(e) => handleInputChange("facilityId", e.target.value)}
+                    required
+                  />
+                </div> </>
               )}
 
               {userType === "Family Member" && (

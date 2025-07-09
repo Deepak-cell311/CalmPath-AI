@@ -451,7 +451,7 @@ export default function PatientInterface() {
     try {
       console.log("Sending message to AI:", message)
 
-      const response = await fetch("https://calmpath-ai-backend.onrender.com/api/chat", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -710,9 +710,8 @@ export default function PatientInterface() {
                     {showingMemoryPhotos.map((_, index) => (
                       <div
                         key={index}
-                        className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                          index === currentMemoryIndex ? "bg-white" : "bg-white/50"
-                        }`}
+                        className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentMemoryIndex ? "bg-white" : "bg-white/50"
+                          }`}
                       />
                     ))}
                   </div>
@@ -787,15 +786,13 @@ export default function PatientInterface() {
               {comfortActivities.map((activity, index) => (
                 <Card
                   key={index}
-                  className={`p-4 text-center hover:shadow-md transition-all cursor-pointer ${
-                    activity.name === "Breathing" ? "border-2 border-blue-500 bg-blue-50" : ""
-                  }`}
+                  className={`p-4 text-center hover:shadow-md transition-all cursor-pointer ${activity.name === "Breathing" ? "border-2 border-blue-500 bg-blue-50" : ""
+                    }`}
                   onClick={() => handleActivityClick(activity.name)}
                 >
                   <activity.icon
-                    className={`w-8 h-8 mx-auto mb-2 ${
-                      activity.name === "Breathing" ? "text-blue-600" : "text-blue-500"
-                    }`}
+                    className={`w-8 h-8 mx-auto mb-2 ${activity.name === "Breathing" ? "text-blue-600" : "text-blue-500"
+                      }`}
                   />
                   <p className="text-sm font-medium">{activity.name}</p>
                 </Card>
@@ -809,18 +806,16 @@ export default function PatientInterface() {
 
             <div className="relative mb-8 flex items-center justify-center">
               <div
-                className={`w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg transition-all duration-[4000ms] ease-in-out ${
-                  breathingPhase === "inhale" ? "scale-125 shadow-2xl" : "scale-100 shadow-lg"
-                }`}
+                className={`w-32 h-32 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg transition-all duration-[4000ms] ease-in-out ${breathingPhase === "inhale" ? "scale-125 shadow-2xl" : "scale-100 shadow-lg"
+                  }`}
                 style={{
                   filter: breathingPhase === "inhale" ? "brightness(1.1)" : "brightness(1)",
                 }}
               />
               {/* Outer ring for additional visual effect */}
               <div
-                className={`absolute w-40 h-40 rounded-full border-2 border-blue-300 opacity-30 transition-all duration-[4000ms] ease-in-out ${
-                  breathingPhase === "inhale" ? "scale-110 opacity-50" : "scale-100 opacity-30"
-                }`}
+                className={`absolute w-40 h-40 rounded-full border-2 border-blue-300 opacity-30 transition-all duration-[4000ms] ease-in-out ${breathingPhase === "inhale" ? "scale-110 opacity-50" : "scale-100 opacity-30"
+                  }`}
               />
             </div>
 
@@ -884,15 +879,13 @@ export default function PatientInterface() {
               {comfortActivities.map((activity, index) => (
                 <Card
                   key={index}
-                  className={`p-4 text-center hover:shadow-md transition-all cursor-pointer ${
-                    activity.name === "Peaceful Scene" ? "border-2 border-green-500 bg-green-50" : ""
-                  }`}
+                  className={`p-4 text-center hover:shadow-md transition-all cursor-pointer ${activity.name === "Peaceful Scene" ? "border-2 border-green-500 bg-green-50" : ""
+                    }`}
                   onClick={() => handleActivityClick(activity.name)}
                 >
                   <activity.icon
-                    className={`w-8 h-8 mx-auto mb-2 ${
-                      activity.name === "Peaceful Scene" ? "text-green-600" : "text-blue-500"
-                    }`}
+                    className={`w-8 h-8 mx-auto mb-2 ${activity.name === "Peaceful Scene" ? "text-green-600" : "text-blue-500"
+                      }`}
                   />
                   <p className="text-sm font-medium">{activity.name}</p>
                 </Card>
@@ -921,9 +914,8 @@ export default function PatientInterface() {
                   {peacefulImages.map((_, index) => (
                     <div
                       key={index}
-                      className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                        index === currentImageIndex ? "bg-white" : "bg-white/50"
-                      }`}
+                      className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentImageIndex ? "bg-white" : "bg-white/50"
+                        }`}
                     />
                   ))}
                 </div>
@@ -1082,15 +1074,14 @@ export default function PatientInterface() {
           <div className="relative">
             <Button
               size="lg"
-              className={`w-32 h-32 rounded-full ${
-                !speechSupported
+              className={`w-32 h-32 rounded-full ${!speechSupported
                   ? "bg-gray-400 hover:bg-gray-500 cursor-not-allowed"
                   : isListening
                     ? "bg-red-500 hover:bg-red-600"
                     : isProcessing
                       ? "bg-yellow-500 hover:bg-yellow-600"
                       : "bg-blue-500 hover:bg-blue-600"
-              } text-white shadow-lg transition-all relative overflow-hidden`}
+                } text-white shadow-lg transition-all relative overflow-hidden`}
               onClick={handleMicrophoneClick}
               disabled={isProcessing || !speechSupported}
             >
@@ -1177,15 +1168,14 @@ export default function PatientInterface() {
           <Button
             variant="outline"
             size="sm"
-            className={`${
-              microphoneTest === "testing"
+            className={`${microphoneTest === "testing"
                 ? "text-yellow-600 border-yellow-600"
                 : microphoneTest === "success"
                   ? "text-green-600 border-green-600"
                   : microphoneTest === "error"
                     ? "text-red-600 border-red-600"
                     : "text-blue-600 border-blue-600"
-            } bg-transparent`}
+              } bg-transparent`}
             onClick={testMicrophone}
             disabled={microphoneTest === "testing" || !speechSupported}
           >
@@ -1200,15 +1190,14 @@ export default function PatientInterface() {
           <Button
             variant="outline"
             size="sm"
-            className={`${
-              speechTest === "testing"
+            className={`${speechTest === "testing"
                 ? "text-yellow-600 border-yellow-600"
                 : speechTest === "success"
                   ? "text-green-600 border-green-600"
                   : speechTest === "error"
                     ? "text-red-600 border-red-600"
                     : "text-green-600 border-green-600"
-            } bg-transparent`}
+              } bg-transparent`}
             onClick={testSimpleSpeech}
             disabled={speechTest === "testing"}
           >
@@ -1243,11 +1232,10 @@ export default function PatientInterface() {
                     className={`flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[85%] p-3 rounded-lg shadow-sm ${
-                        message.type === "user"
+                      className={`max-w-[85%] p-3 rounded-lg shadow-sm ${message.type === "user"
                           ? "bg-blue-500 text-white rounded-br-sm"
                           : "bg-gray-100 text-gray-800 rounded-bl-sm"
-                      }`}
+                        }`}
                     >
                       <p className="font-medium text-xs mb-2 opacity-75">
                         {message.type === "user" ? "You said:" : "CalmPath:"}
