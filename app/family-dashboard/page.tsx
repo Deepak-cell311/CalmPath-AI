@@ -62,7 +62,7 @@ export default function FamilyDashboard() {
     const formData = new FormData();
      
     try {
-      const response = await fetch(`${process.env.API_URL}/api/family/memoryPhotos`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos`, {
         method: "POST",
         body: formData,
         credentials: "include", // if using session/cookie auth

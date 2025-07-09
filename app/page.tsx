@@ -331,7 +331,7 @@ export default function PatientInterface() {
       if (recognitionRef.current) {
         recognitionRef.current.start()
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error starting speech recognition:", error)
       if (error.name === "NotAllowedError") {
         addErrorMessage(
