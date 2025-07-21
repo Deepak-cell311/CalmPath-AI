@@ -31,6 +31,7 @@ export default function LoginPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // <-- ensure session cookie is set
         body: JSON.stringify({
           email, password, accountType: userType
         }),

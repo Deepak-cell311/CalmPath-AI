@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Heart, Camera, MessageCircle, Bell, User, LogOut, Plus, Upload, X, Tag } from "lucide-react"
+import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 
 interface MemoryPhoto {
   id: number
@@ -30,8 +31,18 @@ interface MemoryPhoto {
   context: string
 }
 
+interface Medication {
+  id: number;
+  name: string;
+  dosage: string;
+  frequency: string;
+  time: string;
+}
+
 export default function FamilyDashboard() {
+  const loading = useAuthRedirect();
   const [photos, setPhotos] = useState<MemoryPhoto[]>([])
+  const [patientId, setPatientId] = useState<number | null>(null);
 
   console.log("Photos: ", photos)
 
@@ -39,6 +50,14 @@ export default function FamilyDashboard() {
     { id: 1, date: "2024-01-15", duration: "5 min", mood: "calm", summary: "Talked about morning routine" },
     { id: 2, date: "2024-01-14", duration: "8 min", mood: "happy", summary: "Shared memories about gardening" },
   ])
+
+  const [personalInfo, setPersonalInfo] = useState({
+    work: "Retired engineer, worked on bridges and infrastructure projects.",
+    family: "Wife: Mary (passed away), Children: John, Sarah. Grandchildren: Emily, David, Olivia.",
+    hobbies: "Gardening (especially roses), reading historical novels, playing chess, listening to classical music.",
+    food: "Shepherd's pie, apple crumble, strong black coffee.",
+    other: "Loves quiet mornings, enjoys talking about his youth, can get agitated by loud noises.",
+  })
 
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [newPhoto, setNewPhoto] = useState({
@@ -49,6 +68,87 @@ export default function FamilyDashboard() {
     file: null as File | null,
   })
 
+  const [medications, setMedications] = useState<Medication[]>([]);
+  const [newMedication, setNewMedication] = useState({
+    name: "",
+    dosage: "",
+    frequency: "",
+    time: "",
+  });
+
+  const fetchExistingPhotos = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      const result = await response.json();
+      if (response.ok && Array.isArray(result.data)) {
+        setPhotos(result.data.map((photo: any) => ({
+          id: photo.id || Date.now(),
+          name: photo.photoname,
+          date: new Date(photo.created_at || Date.now()).toLocaleDateString(),
+          tags: photo.tags,
+          description: photo.description,
+          url: photo.file,
+          context: photo.contextAndStory,
+        })));
+      }
+    } catch (error) {
+      console.error("Error fetching photos:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchExistingPhotos();
+  }, []);
+
+  useEffect(() => {
+    if (!patientId) return;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/medications`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) setMedications(data);
+      })
+      .catch((err) => console.error("Error fetching medications:", err));
+  }, [patientId]);
+
+
+  if (loading) return <div>Loading...</div>;
+
+  const handleAddMedication = async () => {
+    if (!newMedication.name || !newMedication.dosage || !newMedication.frequency || !newMedication.time || !patientId) return;
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/medications`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(newMedication),
+      });
+      if (res.ok) {
+        const med = await res.json();
+        setMedications((prev) => [...prev, med]);
+        setNewMedication({ name: "", dosage: "", frequency: "", time: "" });
+      }
+    } catch (err) {
+      console.error("Error adding medication:", err);
+    }
+  };
+
+  const handleRemoveMedication = async (id: number) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/medications/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setMedications((prev) => prev.filter((med) => med.id !== id));
+      }
+    } catch (err) {
+      console.error("Error deleting medication:", err);
+    }
+  };
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
@@ -60,7 +160,7 @@ export default function FamilyDashboard() {
     if (!newPhoto.file) return;
 
     const formData = new FormData();
-     
+
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos`, {
         method: "POST",
@@ -102,39 +202,21 @@ export default function FamilyDashboard() {
     }
   };
 
-  // Load existing photos when component mounts
-  useEffect(() => {
-    fetchExistingPhotos();
-  }, [])
-
-  const fetchExistingPhotos = async () => {
-    try {
-      const response = await fetch(`${process.env.API_URL}/api/family/memoryPhotos`, {
-        method: "GET",
-        credentials: "include",
-      });
-
-      const result = await response.json();
-      if (response.ok && Array.isArray(result.data)) {
-        setPhotos(result.data.map((photo: any) => ({
-          id: photo.id || Date.now(),
-          name: photo.photoname,
-          date: new Date(photo.created_at || Date.now()).toLocaleDateString(),
-          tags: photo.tags,
-          description: photo.description,
-          url: photo.file,
-          context: photo.contextAndStory,
-        })));
-      }
-    } catch (error) {
-      console.error("Error fetching photos:", error);
-    }
-  };
-
 
   const removePhoto = (photoId: number) => {
     setPhotos((prev) => prev.filter((photo) => photo.id !== photoId))
   }
+
+  const handlePersonalInfoChange = (field: string, value: string) => {
+    setPersonalInfo((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleSavePersonalInfo = () => {
+    // In a real application, you would send this data to a backend
+    console.log("Saving personal info:", personalInfo)
+    alert("Personal information saved!")
+  }
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -165,16 +247,17 @@ export default function FamilyDashboard() {
       <main className="p-6">
         <div className="max-w-6xl mx-auto">
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="photos">Memory Photos</TabsTrigger>
-              <TabsTrigger value="conversations">Conversations</TabsTrigger>
+              <TabsTrigger value="medications">Medications</TabsTrigger>
+              <TabsTrigger value="personal-info">Personal Info</TabsTrigger>
               {/* <TabsTrigger value="settings">Settings</TabsTrigger> */}
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">
               {/* Status Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Today's Sessions</CardTitle>
@@ -184,15 +267,7 @@ export default function FamilyDashboard() {
                     <p className="text-xs text-muted-foreground">+1 from yesterday</p>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">Average Mood</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-green-600">Calm</div>
-                    <p className="text-xs text-muted-foreground">Stable this week</p>
-                  </CardContent>
-                </Card>
+                {/* Removed Average Mood card */}
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Memory Photos</CardTitle>
@@ -203,7 +278,6 @@ export default function FamilyDashboard() {
                   </CardContent>
                 </Card>
               </div>
-
               {/* Recent Activity */}
               <Card>
                 <CardHeader>
@@ -389,7 +463,157 @@ export default function FamilyDashboard() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="conversations" className="space-y-6">
+            <TabsContent value="medications" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Medication Schedule</CardTitle>
+                  <CardDescription>Manage patient's medications and schedule</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <Label htmlFor="med-name">Medication Name</Label>
+                        <Input
+                          id="med-name"
+                          value={newMedication.name}
+                          onChange={(e) => setNewMedication((prev) => ({ ...prev, name: e.target.value }))}
+                          placeholder="e.g., Donepezil"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="med-dosage">Dosage</Label>
+                        <Input
+                          id="med-dosage"
+                          value={newMedication.dosage}
+                          onChange={(e) => setNewMedication((prev) => ({ ...prev, dosage: e.target.value }))}
+                          placeholder="e.g., 5mg"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="med-frequency">Frequency</Label>
+                        <Input
+                          id="med-frequency"
+                          value={newMedication.frequency}
+                          onChange={(e) => setNewMedication((prev) => ({ ...prev, frequency: e.target.value }))}
+                          placeholder="e.g., Once daily"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="med-time">Time</Label>
+                        <Input
+                          id="med-time"
+                          value={newMedication.time}
+                          onChange={(e) => setNewMedication((prev) => ({ ...prev, time: e.target.value }))}
+                          placeholder="e.g., Morning"
+                        />
+                      </div>
+                    </div>
+                    <Button onClick={handleAddMedication} className="w-full">
+                      <Plus className="w-4 h-4 mr-2" /> Add Medication
+                    </Button>
+
+                    <h3 className="text-lg font-semibold mt-6 mb-3">Current Medications</h3>
+                    {medications.length === 0 ? (
+                      <p className="text-gray-600">No medications added yet.</p>
+                    ) : (
+                      <ScrollArea className="h-64 border rounded-lg p-4">
+                        <div className="space-y-3">
+                          {medications.map((med) => (
+                            <div key={med.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div>
+                                <p className="font-medium">
+                                  {med.name} - {med.dosage}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                  {med.frequency} at {med.time}
+                                </p>
+                              </div>
+                              <Button variant="destructive" size="sm" onClick={() => handleRemoveMedication(med.id)}>
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="personal-info" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Patient Personal Information</CardTitle>
+                  <CardDescription>
+                    Provide details about the patient to help the AI personalize conversations.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="work-history">Work History / Career</Label>
+                    <Textarea
+                      id="work-history"
+                      value={personalInfo.work}
+                      onChange={(e) => handlePersonalInfoChange("work", e.target.value)}
+                      placeholder="e.g., Retired teacher, worked for 30 years at Lincoln High School."
+                      rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">What kind of work did the patient do?</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="family-names">Family Members & Relationships</Label>
+                    <Textarea
+                      id="family-names"
+                      value={personalInfo.family}
+                      onChange={(e) => handlePersonalInfoChange("family", e.target.value)}
+                      placeholder="e.g., Spouse: Jane, Children: Mark, Lisa. Grandchildren: Alex, Sarah."
+                      rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Names of important family members and their relation.</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="hobbies">Hobbies & Interests</Label>
+                    <Textarea
+                      id="hobbies"
+                      value={personalInfo.hobbies}
+                      onChange={(e) => handlePersonalInfoChange("hobbies", e.target.value)}
+                      placeholder="e.g., Painting, gardening, playing golf, listening to jazz music."
+                      rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">What does the patient enjoy doing?</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="favorite-foods">Favorite Foods</Label>
+                    <Textarea
+                      id="favorite-foods"
+                      value={personalInfo.food}
+                      onChange={(e) => handlePersonalInfoChange("food", e.target.value)}
+                      placeholder="e.g., Apple pie, roast chicken, mashed potatoes."
+                      rows={2}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Foods that bring comfort or good memories.</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="other-details">Other Important Details</Label>
+                    <Textarea
+                      id="other-details"
+                      value={personalInfo.other}
+                      onChange={(e) => handlePersonalInfoChange("other", e.target.value)}
+                      placeholder="e.g., Loves animals, has a pet cat named Whiskers, enjoys quiet environments."
+                      rows={4}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Any other details that help personalize interaction.</p>
+                  </div>
+                  <Button onClick={handleSavePersonalInfo} className="w-full">
+                    Save Personal Info
+                  </Button>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* <TabsContent value="conversations" className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle>Conversation History</CardTitle>
@@ -423,7 +647,7 @@ export default function FamilyDashboard() {
                   </ScrollArea>
                 </CardContent>
               </Card>
-            </TabsContent>
+            </TabsContent> */}
 
             <TabsContent value="settings" className="space-y-6">
               <Card>
