@@ -160,6 +160,11 @@ export default function FamilyDashboard() {
     if (!newPhoto.file) return;
 
     const formData = new FormData();
+    formData.append("photo", newPhoto.file); // field name must match backend
+    formData.append("photoname", newPhoto.name);
+    formData.append("description", newPhoto.description);
+    formData.append("tags", JSON.stringify(newPhoto.tags.split(",").map(tag => tag.trim()).filter(Boolean)));
+    formData.append("contextAndStory", newPhoto.context);
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos`, {

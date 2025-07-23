@@ -82,6 +82,9 @@ export default function PatientInterface() {
 
   const recognitionRef = useRef<any>(null)
   const breathingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [voiceChatMode, setVoiceChatMode] = useState(false)
+  const lastHeardRef = useRef(Date.now())
+  const restartTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const comfortActivities = [
     { name: "Peaceful Music", icon: Music },
@@ -317,32 +320,38 @@ export default function PatientInterface() {
   // Start speech recognition with explicit permission request
   const startListening = async () => {
     if (!speechSupported) {
-      addErrorMessage("Speech recognition is not supported in your browser. Please try typing your message instead.")
-      setShowTextInput(true)
-      return
+      addErrorMessage("Speech recognition is not supported in your browser. Please try typing your message instead.");
+      setShowTextInput(true);
+      return;
     }
 
     try {
       // Request microphone permission explicitly for iOS/iPhone
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        await navigator.mediaDevices.getUserMedia({ audio: true })
+        await navigator.mediaDevices.getUserMedia({ audio: true });
       }
 
-      if (recognitionRef.current) {
-        recognitionRef.current.start()
+      // If recognition is already running, stop it first, then start after a short delay
+      if (recognitionRef.current && isListening) {
+        recognitionRef.current.stop();
+        setTimeout(() => {
+          if (recognitionRef.current) recognitionRef.current.start();
+        }, 500); // 500ms delay to allow proper restart
+      } else if (recognitionRef.current) {
+        recognitionRef.current.start();
       }
     } catch (error: any) {
-      console.error("Error starting speech recognition:", error)
+      console.error("Error starting speech recognition:", error);
       if (error.name === "NotAllowedError") {
         addErrorMessage(
           "Microphone access denied. Please allow microphone access in your browser settings and try again.",
-        )
+        );
       } else {
-        addErrorMessage("Unable to start listening. Please try again or use text input.")
+        addErrorMessage("Unable to start listening. Please try again or use text input.");
       }
-      setShowTextInput(true)
+      setShowTextInput(true);
     }
-  }
+  };
 
   // Stop speech recognition
   const stopListening = () => {
@@ -594,6 +603,13 @@ export default function PatientInterface() {
       utterance.voice = selectedVoice
     }
 
+    utterance.onend = () => {
+      // After response is spoken, restart listening if voiceChatMode is ON
+      if (voiceChatMode) {
+        startListening();
+      }
+    };
+
     speechSynthesis.speak(utterance)
   }
 
@@ -616,6 +632,18 @@ export default function PatientInterface() {
       startListening()
     }
   }
+
+  const handleVoiceChatMicClick = () => {
+    if (voiceChatMode) {
+      stopListening();
+      speechSynthesis.cancel();
+      setVoiceChatMode(false);
+      if (restartTimeout.current) clearTimeout(restartTimeout.current);
+    } else {
+      setVoiceChatMode(true);
+      setTimeout(() => startListening(), 300);
+    }
+  };
 
   // Handle activity selection
   const handleActivityClick = (activityName: string) => {
@@ -1085,34 +1113,48 @@ export default function PatientInterface() {
               size="lg"
               className={`w-32 h-32 rounded-full ${!speechSupported
                   ? "bg-gray-400 hover:bg-gray-500 cursor-not-allowed"
+                  : voiceChatMode
+                    ? isListening
+                      ? "bg-green-600 hover:bg-green-700"
+                      : isProcessing
+                        ? "bg-yellow-500 hover:bg-yellow-600"
+                        : "bg-green-500 hover:bg-green-600"
                   : isListening
                     ? "bg-red-500 hover:bg-red-600"
                     : isProcessing
                       ? "bg-yellow-500 hover:bg-yellow-600"
                       : "bg-blue-500 hover:bg-blue-600"
                 } text-white shadow-lg transition-all relative overflow-hidden`}
-              onClick={handleMicrophoneClick}
+              onClick={handleVoiceChatMicClick}
               disabled={isProcessing || !speechSupported}
             >
               {!speechSupported ? (
                 <Shield className="w-8 h-8 relative z-10" />
+              ) : voiceChatMode ? (
+                isListening ? <MicOff className="w-8 h-8 relative z-10" /> : <Mic className="w-8 h-8 relative z-10" />
               ) : isListening ? (
                 <MicOff className="w-8 h-8 relative z-10" />
               ) : (
                 <Mic className="w-8 h-8 relative z-10" />
               )}
-              {isListening && <div className="absolute inset-0 bg-white opacity-20 animate-pulse" />}
+              {(isListening || voiceChatMode) && <div className="absolute inset-0 bg-white opacity-20 animate-pulse" />}
             </Button>
           </div>
 
           <p className="mt-4 text-lg font-medium">
             {!speechSupported
               ? "Speech not supported - use text below"
-              : isListening
-                ? "Speaking... Tap to stop and send"
-                : isProcessing
-                  ? "Processing..."
-                  : "Tap to start speaking"}
+              : voiceChatMode
+                ? isListening
+                  ? "Listening… Speak now! (Tap to stop)"
+                  : isProcessing
+                    ? "Thinking…"
+                    : "Voice chat session active (Tap to stop)"
+                : isListening
+                  ? "Speaking... Tap to stop and send"
+                  : isProcessing
+                    ? "Processing..."
+                    : "Tap to start speaking"}
           </p>
           <p className="text-gray-600 mt-2">{"I'm here to help you feel calm"}</p>
         </div>
@@ -1339,63 +1381,58 @@ export default function PatientInterface() {
 
 //   // --- Initialize SpeechRecognition
 //   useEffect(() => {
-//     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+//     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 //     if (SpeechRecognition) {
-//       setSpeechSupported(true)
-//       recognitionRef.current = new SpeechRecognition()
-//       recognitionRef.current.continuous = true
-//       recognitionRef.current.interimResults = true
-//       recognitionRef.current.lang = "en-US"
-//       recognitionRef.current.maxAlternatives = 1
+//       setSpeechSupported(true);
+//       recognitionRef.current = new SpeechRecognition();
+//       recognitionRef.current.continuous = true;
+//       recognitionRef.current.interimResults = true;
+//       recognitionRef.current.lang = "en-US";
+//       recognitionRef.current.maxAlternatives = 1;
 
 //       recognitionRef.current.onstart = () => {
-//         setIsListening(true)
-//         setCurrentTranscript("")
-//         transcriptRef.current = ""
-//         console.log('[SR] onstart')
-//       }
+//         setIsListening(true);
+//         setCurrentTranscript("");
+//         transcriptRef.current = "";
+//       };
 
 //       recognitionRef.current.onresult = (event: any) => {
-//         lastHeardRef.current = Date.now()
+//         lastHeardRef.current = Date.now();
 //         let interim = "", final = ""
 //         for (let i = event.resultIndex; i < event.results.length; i++) {
-//           const t = event.results[i][0].transcript
-//           if (event.results[i].isFinal) final += t
-//           else interim += t
+//           const t = event.results[i][0].transcript;
+//           if (event.results[i].isFinal) final += t;
+//           else interim += t;
 //         }
-//         setCurrentTranscript(interim || final)
-//         transcriptRef.current = interim || final
-//         console.log('[SR] onresult', interim || final)
-//       }
+//         setCurrentTranscript(interim || final);
+//         transcriptRef.current = interim || final;
+//       };
 
 //       recognitionRef.current.onerror = (event: any) => {
-//         setIsListening(false)
-//         setCurrentTranscript("")
-//         transcriptRef.current = ""
-//         console.error('[SR] onerror', event.error)
-//       }
+//         setIsListening(false);
+//         setCurrentTranscript("");
+//         transcriptRef.current = "";
+//       };
 
 //       recognitionRef.current.onend = () => {
-//         setIsListening(false)
-//         const finalText = transcriptRef.current.trim()
-//         setCurrentTranscript("")
-//         transcriptRef.current = ""
-//         console.log('[SR] onend, transcript:', finalText)
+//         setIsListening(false);
+//         const finalText = transcriptRef.current.trim();
+//         setCurrentTranscript("");
+//         transcriptRef.current = "";
 //         if (finalText && finalText.length > 1) {
-//           handleSpeechResult(finalText)
+//           handleSpeechResult(finalText);
 //         } else if (voiceChatMode) {
-//           // Debounce next start!
-//           if (restartTimeout.current) clearTimeout(restartTimeout.current)
+//           if (restartTimeout.current) clearTimeout(restartTimeout.current);
 //           restartTimeout.current = setTimeout(() => {
 //             if (voiceChatMode && !isListening && !speechSynthesis.speaking) {
 //               startListening()
 //             }
 //           }, 400)
 //         }
-//       }
+//       };
 //     }
 //     // eslint-disable-next-line
-//   }, [voiceChatMode])
+//   }, [voiceChatMode]);
 
 //   // --- Auto-timeout: If no new speech in 2 seconds, stop listening and process transcript
 //   useEffect(() => {
@@ -1437,46 +1474,34 @@ export default function PatientInterface() {
 //   }
 
 //   const startListening = async () => {
-//     if (!speechSupported) return
-//     if (speechSynthesis.speaking) {
-//       console.log('[SR] startListening blocked: TTS speaking')
-//       return
-//     }
-//     if (isListening) {
-//       console.log('[SR] startListening blocked: already listening')
-//       return
-//     }
+//     if (!speechSupported) return;
+//     if (speechSynthesis.speaking) return;
+//     if (isListening) return;
 //     try {
-//       await navigator.mediaDevices.getUserMedia({ audio: true })
-//       recognitionRef.current && recognitionRef.current.start()
-//       lastHeardRef.current = Date.now()
-//       console.log('[SR] startListening')
-//     } catch (e) {
-//       alert("Microphone access denied or unavailable.")
-//     }
-//   }
+//       await navigator.mediaDevices.getUserMedia({ audio: true });
+//       recognitionRef.current && recognitionRef.current.start();
+//       lastHeardRef.current = Date.now();
+//     } catch (e) {}
+//   };
 
 //   const stopListening = () => {
 //     if (isListening && recognitionRef.current) {
 //       recognitionRef.current.stop()
-//       console.log('[SR] stopListening')
 //     }
-//   }
+//   };
 
 //   const speakResponse = (text: string, onEnd?: () => void) => {
-//     const utterance = new SpeechSynthesisUtterance(text)
-//     if (selectedVoice) utterance.voice = selectedVoice
-//     utterance.rate = 1
+//     const utterance = new SpeechSynthesisUtterance(text);
+//     if (selectedVoice) utterance.voice = selectedVoice;
+//     utterance.rate = 1;
 //     utterance.onend = () => {
-//       console.log('[TTS] onend')
 //       setTimeout(() => {
 //         if (voiceChatMode) startListening()
-//       }, 400)
-//       onEnd && onEnd()
-//     }
-//     speechSynthesis.speak(utterance)
-//     console.log('[TTS] speak', text)
-//   }
+//       }, 400);
+//       onEnd && onEnd();
+//     };
+//     speechSynthesis.speak(utterance);
+//   };
 
 //   // --- Main Chat Step
 //   const handleSpeechResult = async (transcript: string) => {
