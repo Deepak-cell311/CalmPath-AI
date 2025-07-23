@@ -9,6 +9,7 @@ export function useAuthRedirect() {
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user`, { credentials: "include" })
       .then(res => {
         if (res.status === 401) {
+          console.error("Backend error:", res.status);
           router.replace("/auth/login");
         } else {
           setLoading(false);
