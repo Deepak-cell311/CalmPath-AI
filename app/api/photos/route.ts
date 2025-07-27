@@ -99,3 +99,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to upload photo" }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = Number(searchParams.get("id"));
+    if (!id) {
+      return NextResponse.json({ error: "No id provided" }, { status: 400 });
+    }
+    const index = memoryPhotos.findIndex((photo) => photo.id === id);
+    if (index === -1) {
+      return NextResponse.json({ error: "Photo not found" }, { status: 404 });
+    }
+    memoryPhotos.splice(index, 1);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: "Failed to delete photo" }, { status: 500 });
+  }
+}

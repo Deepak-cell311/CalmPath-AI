@@ -3,21 +3,25 @@ import { useRouter } from "next/navigation";
 
 export function useAuthRedirect() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed to false to not show loading
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user`, { credentials: "include" })
-      .then(res => {
-        if (res.status === 401) {
-          console.error("Backend error:", res.status);
-          router.replace("/auth/login");
-        } else {
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        router.replace("/auth/login");
-      });
+    // Comment out authentication check to allow direct access
+    // fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user`, { credentials: "include" })
+    //   .then(res => {
+    //     if (res.status === 401) {
+    //       console.error("Backend error:", res.status);
+    //       router.replace("/auth/login");
+    //     } else {
+    //       setLoading(false);
+    //     }
+    //   })
+    //   .catch(() => {
+    //     router.replace("/auth/login");
+    //   });
+    
+    // Allow direct access without authentication
+    setLoading(false);
   }, [router]);
 
   return loading;

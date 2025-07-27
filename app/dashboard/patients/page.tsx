@@ -18,21 +18,13 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Users, Plus, Mail, Phone, Calendar, Edit, Trash2 } from "lucide-react"
-
-interface Patient {
-  id: string
-  name: string
-  email: string
-  phone: string
-  dateAdded: string
-  status: "Active" | "Invited" | "Inactive"
-  lastActivity: string
-}
+import { Users, Plus, Mail, Phone, Calendar, Edit, Trash2, Loader2 } from "lucide-react"
+import { usePatients } from "@/hooks/usePatients"
+import { toast } from "sonner"
 
 export default function PatientManagement() {
-  const [patients, setPatients] = useState<Patient[]>([])
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [inviteForm, setInviteForm] = useState({
     name: "",
     email: "",
@@ -40,26 +32,54 @@ export default function PatientManagement() {
     message: "",
   })
 
-  const handleInvitePatient = (e: React.FormEvent) => {
+  // Use the custom hook for patient management
+  const { 
+    patients, 
+    stats, 
+    loading, 
+    error, 
+    createPatient, 
+    deletePatient, 
+    updatePatientStatus 
+  } = usePatients()
+
+  const handleInvitePatient = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsSubmitting(true)
 
-    const newPatient: Patient = {
-      id: Date.now().toString(),
-      name: inviteForm.name,
-      email: inviteForm.email,
-      phone: inviteForm.phone,
-      dateAdded: new Date().toLocaleDateString(),
-      status: "Invited",
-      lastActivity: "Never",
+    try {
+      const success = await createPatient({
+        name: inviteForm.name,
+        email: inviteForm.email,
+        phone: inviteForm.phone || undefined,
+        message: inviteForm.message || undefined,
+      })
+
+      if (success) {
+        toast.success("Patient invitation sent successfully!")
+        setInviteForm({ name: "", email: "", phone: "", message: "" })
+        setIsInviteDialogOpen(false)
+      } else {
+        toast.error("Failed to send invitation. Please try again.")
+      }
+    } catch (error) {
+      toast.error("An error occurred while sending the invitation.")
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setPatients([...patients, newPatient])
-    setInviteForm({ name: "", email: "", phone: "", message: "" })
-    setIsInviteDialogOpen(false)
   }
 
-  const handleDeletePatient = (id: string) => {
-    setPatients(patients.filter((patient) => patient.id !== id))
+  const handleDeletePatient = async (id: string) => {
+    try {
+      const success = await deletePatient(id)
+      if (success) {
+        toast.success("Patient deleted successfully!")
+      } else {
+        toast.error("Failed to delete patient. Please try again.")
+      }
+    } catch (error) {
+      toast.error("An error occurred while deleting the patient.")
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -144,10 +164,24 @@ export default function PatientManagement() {
                   />
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsInviteDialogOpen(false)}>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsInviteDialogOpen(false)}
+                    disabled={isSubmitting}
+                  >
                     Cancel
                   </Button>
-                  <Button type="submit">Send Invitation</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      'Send Invitation'
+                    )}
+                  </Button>
                 </div>
               </form>
             </DialogContent>
@@ -164,7 +198,13 @@ export default function PatientManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Total Patients</p>
-                  <p className="text-3xl font-bold text-gray-900">{patients.length}</p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {loading ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                    ) : (
+                      stats?.total || patients?.length
+                    )}
+                  </p>
                 </div>
                 <Users className="w-8 h-8 text-blue-600" />
               </div>
@@ -176,7 +216,11 @@ export default function PatientManagement() {
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Active Patients</p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {patients.filter((p) => p.status === "Active").length}
+                    {loading ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                    ) : (
+                      stats?.active ?? (Array.isArray(patients) ? patients.filter((p) => p.status === "Active").length : 0)
+                    )}
                   </p>
                 </div>
                 <Calendar className="w-8 h-8 text-green-600" />
@@ -189,7 +233,11 @@ export default function PatientManagement() {
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Pending Invites</p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {patients.filter((p) => p.status === "Invited").length}
+                    {loading ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                    ) : (
+                      stats?.invited ?? (Array.isArray(patients) ? patients.filter((p) => p.status === "Invited").length : 0)
+                    )}
                   </p>
                 </div>
                 <Mail className="w-8 h-8 text-yellow-600" />
@@ -198,13 +246,25 @@ export default function PatientManagement() {
           </Card>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-red-800">{error}</p>
+          </div>
+        )}
+
         {/* Patients Table */}
         <Card>
           <CardHeader>
             <CardTitle>Patient List</CardTitle>
           </CardHeader>
           <CardContent>
-            {patients.length === 0 ? (
+            {loading ? (
+              <div className="text-center py-12">
+                <Loader2 className="w-16 h-16 animate-spin text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">Loading patients...</p>
+              </div>
+            ) : patients.length === 0 ? (
               <div className="text-center py-12">
                 <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No patients yet</h3>
@@ -251,8 +311,8 @@ export default function PatientManagement() {
                           {patient.status}
                         </span>
                       </TableCell>
-                      <TableCell>{patient.dateAdded}</TableCell>
-                      <TableCell>{patient.lastActivity}</TableCell>
+                      <TableCell>{patient.date_added}</TableCell>
+                      <TableCell>{patient.last_activity}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="sm">
