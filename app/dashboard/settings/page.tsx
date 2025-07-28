@@ -30,6 +30,7 @@ export default function SettingsPage() {
     systemUpdates: true,
   })
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const [facilityBilling, setFacilityBilling] = useState({
     monthlyPrice: "",      // e.g. "25"
     promoCode: "",         // e.g. "FREE2025"
@@ -101,9 +102,30 @@ export default function SettingsPage() {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        // Update local state with the response data
+        setFacilityBilling({
+          monthlyPrice: facilityBilling.monthlyPrice, // Keep the user's input
+          promoCode: data.facility?.promoCode || "",
+          stripePriceId: data.stripePriceId || "",
+        });
         setBillingSaveStatus("Saved!");
         // Clear status after 3 seconds
         setTimeout(() => setBillingSaveStatus(""), 3000);
+        
+        // Refresh the billing data to show updated values
+        setTimeout(() => {
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`)
+            .then(res => res.json())
+            .then(data => {
+              setFacilityBilling({
+                monthlyPrice: data.monthlyPrice || "",
+                promoCode: data.promoCode || "",
+                stripePriceId: data.stripePriceId || "",
+              });
+            })
+            .catch(() => setBillingSaveStatus("Failed to refresh billing settings"));
+        }, 1000);
       } else {
         const errorData = await res.json();
         setBillingSaveStatus(errorData.message || "Failed to save billing settings");
@@ -300,7 +322,7 @@ export default function SettingsPage() {
                     </p>
                   </div>
                   {/* Save Button */}
-                  <Button onClick={handleSaveBilling}>Save Changes</Button>
+                  <Button onClick={handleSaveBilling}>{isLoading ? "Updating..." : "Save Changes"}</Button>
                   {billingSaveStatus && (
                     <p className="text-sm mt-2" style={{ color: billingSaveStatus === "Saved!" ? "green" : "red" }}>{billingSaveStatus}</p>
                   )}
@@ -331,138 +353,6 @@ export default function SettingsPage() {
               </Card>
             </div>
           </TabsContent>
-
-
-          {/* Commission Payouts */}
-          {/* <TabsContent value="payouts"> */}
-            {/* <div className="space-y-6"> */}
-              {/* Payout Summary */}
-              {/* <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="w-5 h-5" />
-                    Commission Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600 mb-1">This Month</p>
-                      <p className="text-3xl font-bold text-green-600">$1,247</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600 mb-1">Total Earned</p>
-                      <p className="text-3xl font-bold">$8,932</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600 mb-1">Next Payout</p>
-                      <p className="text-lg font-medium">Jan 1, 2025</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card> */}
-
-              {/* Payout Settings */}
-              {/* <Card>
-                <CardHeader>
-                  <CardTitle>Payout Settings</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="bankAccount">Bank Account</Label>
-                    <Input id="bankAccount" placeholder="•••• •••• •••• 1234" disabled />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="routingNumber">Routing Number</Label>
-                    <Input id="routingNumber" placeholder="••••••••" disabled />
-                  </div>
-                  <Button variant="outline">Update Banking Info</Button>
-                </CardContent>
-              </Card> */}
-
-              {/* Payout History */}
-              {/* <Card>
-                <CardHeader>
-                  <CardTitle>Payout History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {[
-                      { date: "Dec 1, 2024", amount: "$1,156.00", status: "Completed" },
-                      { date: "Nov 1, 2024", amount: "$987.50", status: "Completed" },
-                      { date: "Oct 1, 2024", amount: "$1,234.75", status: "Completed" },
-                    ].map((payout, index) => (
-                      <div key={index} className="flex items-center justify-between py-2 border-b last:border-b-0">
-                        <div>
-                          <p className="font-medium">{payout.date}</p>
-                          <p className="text-sm text-gray-600">Monthly commission</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-medium">{payout.amount}</span>
-                          <Badge variant="secondary">{payout.status}</Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent> */}
-
-          {/* Notifications */}
-          {/* <TabsContent value="notifications">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5" />
-                  Notification Preferences
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">Email Alerts</h3>
-                    <p className="text-sm text-gray-600">Receive important notifications via email</p>
-                  </div>
-                  <Switch
-                    checked={notifications.emailAlerts}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, emailAlerts: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">SMS Alerts</h3>
-                    <p className="text-sm text-gray-600">Receive urgent notifications via text message</p>
-                  </div>
-                  <Switch
-                    checked={notifications.smsAlerts}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, smsAlerts: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">Weekly Reports</h3>
-                    <p className="text-sm text-gray-600">Get weekly summary reports</p>
-                  </div>
-                  <Switch
-                    checked={notifications.weeklyReports}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, weeklyReports: checked })}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium">System Updates</h3>
-                    <p className="text-sm text-gray-600">Notifications about system updates and maintenance</p>
-                  </div>
-                  <Switch
-                    checked={notifications.systemUpdates}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, systemUpdates: checked })}
-                  />
-                </div>
-                <Button>Save Preferences</Button>
-              </CardContent>
-            </Card>
-          </TabsContent> */}
         </Tabs>
       </main>
     </>

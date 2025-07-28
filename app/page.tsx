@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { NotificationManager } from "@/components/ui/notification"
 import {
   Heart,
   Mic,
@@ -1357,6 +1358,9 @@ export default function PatientInterface() {
           </div> */}
         </div>
       </div>
+      
+      {/* Notification Manager for Reminders */}
+      <NotificationManager patientId={1} />
     </div>
   )
 }

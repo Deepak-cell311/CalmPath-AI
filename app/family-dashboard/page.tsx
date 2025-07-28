@@ -44,18 +44,20 @@ interface Medication {
 interface Reminder {
     id: number;
     message: string;
-    time: string;
+    scheduledTime: string;
+    isActive: boolean;
+    isCompleted: boolean;
 }
 
 export default function FamilyDashboard() {
     const loading = useAuthRedirect();
     const [photos, setPhotos] = useState<MemoryPhoto[]>([])
-    const [patientId, setPatientId] = useState<number | null>(null);
+    const [patientId, setPatientId] = useState<number>(1); // Set default patient ID to 1
     const [isLoading, setIsLoading] = useState(false);
     const [medications, setMedications] = useState<Medication[]>([]);
     const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
     const [billingSaveStatus, setBillingSaveStatus] = useState("");
-    const [newReminder, setNewReminder] = useState({ message: "", time: "" });
+    const [newReminder, setNewReminder] = useState({ message: "", scheduledTime: "" });
     const [reminders, setReminders] = useState<Reminder[]>([]);
     const [facilityMonthlyPrice, setFacilityMonthlyPrice] = useState("25"); // fetched from backend
     const [facilityStripePriceId, setFacilityStripePriceId] = useState(""); // fetched from backend
@@ -146,6 +148,10 @@ export default function FamilyDashboard() {
     useEffect(() => {
         fetchFacilityBilling();
     }, []);
+
+    useEffect(() => {
+        fetchReminders();
+    }, [patientId]);
 
     if (loading) return <div>Loading...</div>;
 
@@ -262,20 +268,103 @@ export default function FamilyDashboard() {
 
 
 
-    // Add
-    function handleAddReminder() {
-        if (!newReminder.message || !newReminder.time) return;
-        setReminders(prev => [
-            ...prev,
-            { id: Date.now(), ...newReminder }
-        ]);
-        setNewReminder({ message: "", time: "" });
-    }
+    // Fetch reminders for the patient
+    const fetchReminders = async () => {
+        try {
+            if (!patientId) {
+                console.log("No patient ID, skipping fetch reminders");
+                return;
+            }
 
-    // Remove
-    function handleRemoveReminder(id: number) {
-        setReminders(prev => prev.filter(r => r.id !== id));
-    }
+            console.log("Fetching reminders for patient:", patientId);
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/reminders`);
+            console.log("Fetch reminders response status:", response.status);
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Fetched reminders:", data);
+                setReminders(data);
+            } else {
+                console.error("Failed to fetch reminders, status:", response.status);
+                const errorData = await response.json().catch(() => ({}));
+                console.error("Error data:", errorData);
+            }
+        } catch (error) {
+            console.error("Error fetching reminders:", error);
+        }
+    };
+
+    // Add reminder
+    const handleAddReminder = async () => {
+        if (!newReminder.message || !newReminder.scheduledTime || !patientId) {
+            console.log("Validation failed:", { message: newReminder.message, scheduledTime: newReminder.scheduledTime, patientId });
+            alert("Please fill in all fields and ensure patient is selected");
+            return;
+        }
+
+        const scheduledDate = new Date(newReminder.scheduledTime);
+        const now = new Date();
+
+        // if (scheduledDate <= now) {
+        //     alert("Scheduled time must be in the future.");
+        //     return;
+        // }
+
+        console.log("Adding reminder:", { newReminder, patientId });
+        console.log("API URL:", `${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/reminders`);
+
+        try {
+            const requestBody = {
+                message: newReminder.message,
+                scheduledTime: new Date(newReminder.scheduledTime).toISOString(), // Always send ISO string
+                createdBy: "family-member", // In a real app, this would be the actual user ID
+            };
+
+            console.log("Request body:", requestBody);
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/reminders`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestBody),
+            });
+
+            console.log("Response status:", response.status);
+            console.log("Response ok:", response.ok);
+
+            if (response.ok) {
+                const newReminderData = await response.json();
+                console.log("Success! New reminder data:", newReminderData);
+                setReminders(prev => [...prev, newReminderData]);
+                setNewReminder({ message: "", scheduledTime: "" });
+                alert("Reminder added successfully!");
+            } else {
+                const error = await response.json();
+                console.error("Failed to create reminder:", error);
+                alert("Failed to create reminder: " + error.message);
+            }
+        } catch (error) {
+            console.error("Error creating reminder:", error);
+            alert("Failed to create reminder: " + (error as Error).message);
+        }
+    };
+
+    // Remove reminder
+    const handleRemoveReminder = async (id: number) => {
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/reminders/${id}`, {
+                method: "DELETE",
+            });
+
+            if (response.ok) {
+                setReminders(prev => prev.filter(r => r.id !== id));
+            } else {
+                alert("Failed to delete reminder");
+            }
+        } catch (error) {
+            console.error("Error deleting reminder:", error);
+            alert("Failed to delete reminder");
+        }
+    };
 
 
 
@@ -290,7 +379,7 @@ export default function FamilyDashboard() {
 
             // Load Stripe
             const stripe = await loadStripe(stripePublishableKey);
-            
+
             if (!stripe) {
                 throw new Error("Stripe failed to load");
             }
@@ -332,7 +421,7 @@ export default function FamilyDashboard() {
             } else {
                 throw new Error("No checkout URL received");
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Subscription error:", error);
             alert("Failed to start subscription: " + error.message);
         } finally {
@@ -660,9 +749,9 @@ export default function FamilyDashboard() {
                                                 <Label htmlFor="reminder-time">Time</Label>
                                                 <Input
                                                     id="reminder-time"
-                                                    type="time"
-                                                    value={newReminder.time}
-                                                    onChange={(e) => setNewReminder((prev) => ({ ...prev, time: e.target.value }))}
+                                                    type="datetime-local"
+                                                    value={newReminder.scheduledTime}
+                                                    onChange={(e) => setNewReminder((prev) => ({ ...prev, scheduledTime: e.target.value }))}
                                                 />
                                             </div>
                                             <div className="flex items-end">
@@ -683,7 +772,7 @@ export default function FamilyDashboard() {
                                                             <div>
                                                                 <p className="font-medium">{rem.message}</p>
                                                                 <p className="text-sm text-gray-600">
-                                                                    {rem.time}
+                                                                    {new Date(rem.scheduledTime).toLocaleString()}
                                                                 </p>
                                                             </div>
                                                             <Button variant="destructive" size="sm" onClick={() => handleRemoveReminder(rem.id)}>
@@ -786,7 +875,7 @@ export default function FamilyDashboard() {
                                     <div className="space-y-2">
                                         <h3 className="font-semibold">Pay & Subscribe</h3>
                                         <p className="text-gray-600 mb-2">
-                                            Monthly price: 
+                                            Monthly price:
                                             {discountAmount && discountType ? (
                                                 <span className="font-medium text-green-600">
                                                     $

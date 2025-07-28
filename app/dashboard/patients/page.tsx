@@ -25,6 +25,7 @@ import { toast } from "sonner"
 export default function PatientManagement() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [patients, setPatients] = useState<any[]>([]);
   const [inviteForm, setInviteForm] = useState({
     name: "",
