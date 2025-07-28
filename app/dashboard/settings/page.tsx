@@ -13,6 +13,7 @@ import { CreditCard, DollarSign, Download, Bell, Building } from "lucide-react"
 
 export default function SettingsPage() {
   const [facilityInfo, setFacilityInfo] = useState({
+    id: "", // Add id field
     name: "",
     address: "",
     phone: "",
@@ -45,6 +46,7 @@ export default function SettingsPage() {
       .then(res => res.json())
       .then(data => {
         setFacilityInfo({
+          id: data.id || "", // Store id from backend
           name: data.name || "",
           address: data.address || "",
           phone: data.phone || "",
@@ -74,12 +76,14 @@ export default function SettingsPage() {
   }, [])
 
   const handleSave = async () => {
+    console.log("handleSave called");
+    console.log("facilityInfo:", facilityInfo);
     setSaveStatus(null)
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       // credentials: "include",
-      body: JSON.stringify(facilityInfo),
+      body: JSON.stringify(facilityInfo), // Send id as well
     })
     if (res.ok) {
       setSaveStatus("Saved!")
@@ -135,6 +139,17 @@ export default function SettingsPage() {
       setBillingSaveStatus("Failed to save billing settings");
     }
   }
+
+  const handleLogoUpload = async (file: File) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/logo`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    setFacilityInfo(prev => ({ ...prev, logoUrl: data.logoUrl }));
+  };
 
   return (
     <>
@@ -224,9 +239,10 @@ export default function SettingsPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        // Upload to backend and set logoUrl
+                        handleLogoUpload(file);
                         // Only set in UI state for now; handle upload in backend logic if/when needed
                         setFacilityInfo(prev => ({ ...prev, logoFile: file }));
-
                         // Optional: Local preview (does NOT affect backend)
                         const reader = new FileReader();
                         reader.onload = () => {
@@ -275,7 +291,7 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                <Button>Save Changes</Button>
+                <Button onClick={handleSave}>Save Changes</Button>
               </CardContent>
             </Card>
           </TabsContent>

@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { useState, useEffect } from "react"
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +19,30 @@ import { useRouter, usePathname } from "next/navigation"
 function AppSidebar() {
   const router = useRouter()
   const pathname = usePathname()
+  const [user, setUser] = useState<any>(null)
+
+  useEffect(() => {
+    // Fetch user data from API
+    const fetchUser = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`, {
+          // credentials: "include"
+        })
+        if (response.ok) {
+          const userData = await response.json()
+          setUser(userData)
+          // Store in localStorage for persistence
+          localStorage.setItem("user", JSON.stringify(userData))
+        } else {
+          console.log("Failed to fetch user data")
+        }
+      } catch (error) {
+        console.error("Error fetching user:", error)
+      }
+    }
+
+    fetchUser()
+  }, [])
 
   const menuItems = [
     { title: "Dashboard", icon: BarChart3, href: "/dashboard" },
@@ -25,10 +50,23 @@ function AppSidebar() {
     { title: "Settings", icon: Settings, href: "/dashboard/settings" },
   ]
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Call logout API if available
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout`, {
+        method: "POST",
+        credentials: "include"
+      })
+    } catch (error) {
+      console.error("Error during logout:", error)
+    }
+    
     // Clear any stored auth tokens/data
     localStorage.removeItem("authToken")
+    localStorage.removeItem("user")
     sessionStorage.clear()
+    setUser(null)
+    
     // Redirect to login page
     router.push("/auth/login")
   }
@@ -68,7 +106,7 @@ function AppSidebar() {
             <User className="w-4 h-4" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium">Dark lord</p>
+            <p className="text-sm font-medium">{user?.firstName || "Staff"} {user?.lastName || "Member"}</p>
             <p className="text-xs text-gray-600">Staff</p>
           </div>
           <button onClick={handleLogout} className="hover:bg-gray-200 p-1 rounded">
