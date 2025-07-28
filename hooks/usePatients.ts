@@ -92,11 +92,11 @@ export function usePatients(facilityId?: string): UsePatientsReturn {
       }
       
       // Remove the patient from the list
-      setPatients(prev => prev.filter(patient => patient.id !== id))
+      setPatients(prev => prev.filter(patient => patient && patient.id !== id))
       
       // Update stats
       if (stats) {
-        const deletedPatient = patients.find(p => p.id === id)
+        const deletedPatient = patients.find(p => p && p.id === id)
         if (deletedPatient) {
           setStats(prev => prev ? {
             ...prev,
@@ -128,12 +128,12 @@ export function usePatients(facilityId?: string): UsePatientsReturn {
       if (response.data) {
         // Update the patient in the list
         setPatients(prev => prev.map(patient => 
-          patient.id === id ? response.data!.patient : patient
+          patient && patient.id === id ? response.data!.patient : patient
         ))
         
         // Update stats
         if (stats) {
-          const oldPatient = patients.find(p => p.id === id)
+          const oldPatient = patients.find(p => p && p.id === id)
           if (oldPatient) {
             setStats(prev => prev ? {
               ...prev,

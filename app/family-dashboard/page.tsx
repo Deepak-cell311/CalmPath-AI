@@ -58,6 +58,8 @@ export default function FamilyDashboard() {
     const [newReminder, setNewReminder] = useState({ message: "", time: "" });
     const [reminders, setReminders] = useState<Reminder[]>([]);
     const [facilityMonthlyPrice, setFacilityMonthlyPrice] = useState("25"); // fetched from backend
+    const [facilityStripePriceId, setFacilityStripePriceId] = useState(""); // fetched from backend
+    const [facilityPromoCode, setFacilityPromoCode] = useState(""); // fetched from backend
     const [userPromoCode, setUserPromoCode] = useState("");
     const [promoCodeStatus, setPromoCodeStatus] = useState("");
     const [discountAmount, setDiscountAmount] = useState<number | null>(null);
@@ -126,6 +128,24 @@ export default function FamilyDashboard() {
             .catch((err) => console.error("Error fetching medications:", err));
     }, [patientId]);
 
+    // Fetch facility billing settings
+    const fetchFacilityBilling = async () => {
+        try {
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`);
+            if (res.ok) {
+                const data = await res.json();
+                setFacilityMonthlyPrice(data.monthlyPrice || "25");
+                setFacilityStripePriceId(data.stripePriceId || "");
+                setFacilityPromoCode(data.promoCode || "");
+            }
+        } catch (error) {
+            console.error("Error fetching facility billing:", error);
+        }
+    };
+
+    useEffect(() => {
+        fetchFacilityBilling();
+    }, []);
 
     if (loading) return <div>Loading...</div>;
 
@@ -270,7 +290,7 @@ export default function FamilyDashboard() {
 
             // Load Stripe
             const stripe = await loadStripe(stripePublishableKey);
-
+            
             if (!stripe) {
                 throw new Error("Stripe failed to load");
             }
@@ -281,14 +301,23 @@ export default function FamilyDashboard() {
                 throw new Error("API URL is not configured");
             }
 
+            // Use facility's Stripe price ID if available, otherwise fallback to default
+            const priceId = facilityStripePriceId || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID;
+            if (!priceId) {
+                throw new Error("No Stripe price ID configured");
+            }
+
             // Create checkout session
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/billing/checkout-session`, {
+            const res = await fetch(`${apiUrl}/api/billing/checkout-session`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_default",
-                    customerEmail: "user@example.com", // Replace with actual user email from auth context
-                    metadata: { userId: "user-id" } // Replace with actual user ID from auth context
+                    priceId: priceId,
+                    customerEmail: "user@example.com", // Replace with actual user email
+                    metadata: {
+                        facilityId: "1", // Replace with actual facility ID
+                    },
+                    couponId: discountAmount ? facilityStripePriceId : undefined, // Apply coupon if discount available
                 })
             });
 
@@ -299,13 +328,13 @@ export default function FamilyDashboard() {
 
             const data = await res.json();
             if (data.url) {
-                window.location.href = data.url; // Redirect to Stripe Checkout
+                window.location.href = data.url;
             } else {
-                throw new Error("Failed to create checkout session - no URL returned");
+                throw new Error("No checkout URL received");
             }
-        } catch (err) {
-            console.error("Subscription error:", err);
-            alert(`Failed to start subscription: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } catch (error) {
+            console.error("Subscription error:", error);
+            alert("Failed to start subscription: " + error.message);
         } finally {
             setIsLoading(false);
         }
@@ -329,6 +358,15 @@ export default function FamilyDashboard() {
         setDiscountType(null);
 
         try {
+            // First check if it matches the facility's promo code
+            if (userPromoCode.trim().toLowerCase() === facilityPromoCode.toLowerCase()) {
+                setPromoCodeStatus("Access Granted!");
+                setDiscountAmount(100);
+                setDiscountType("percent");
+                return;
+            }
+
+            // If not facility promo code, validate with Stripe
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/billing/validate-coupon`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -339,7 +377,6 @@ export default function FamilyDashboard() {
 
             if (data.valid) {
                 setPromoCodeStatus("Access Granted!");
-                // setFacilityMonthlyPrice(data.discount);
                 setDiscountAmount(data.discount);
                 setDiscountType(data.type);
             } else {

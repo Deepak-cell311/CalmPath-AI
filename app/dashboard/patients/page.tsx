@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -25,6 +25,7 @@ import { toast } from "sonner"
 export default function PatientManagement() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [patients, setPatients] = useState<any[]>([]);
   const [inviteForm, setInviteForm] = useState({
     name: "",
     email: "",
@@ -33,14 +34,14 @@ export default function PatientManagement() {
   })
 
   // Use the custom hook for patient management
-  const { 
-    patients, 
-    stats, 
-    loading, 
-    error, 
-    createPatient, 
-    deletePatient, 
-    updatePatientStatus 
+  const {
+    patients: hookPatients,
+    stats,
+    loading,
+    error,
+    createPatient,
+    deletePatient,
+    updatePatientStatus
   } = usePatients()
 
   const handleInvitePatient = async (e: React.FormEvent) => {
@@ -58,7 +59,8 @@ export default function PatientManagement() {
       if (success) {
         toast.success("Patient invitation sent successfully!")
         setInviteForm({ name: "", email: "", phone: "", message: "" })
-        setIsInviteDialogOpen(false)
+        setIsInviteDialogOpen(false);
+        await fetchPatients();
       } else {
         toast.error("Failed to send invitation. Please try again.")
       }
@@ -74,6 +76,7 @@ export default function PatientManagement() {
       const success = await deletePatient(id)
       if (success) {
         toast.success("Patient deleted successfully!")
+        await fetchPatients();
       } else {
         toast.error("Failed to delete patient. Please try again.")
       }
@@ -94,6 +97,31 @@ export default function PatientManagement() {
         return "text-gray-600 bg-gray-100"
     }
   }
+
+  const fetchPatients = async () => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
+      const patientsData = await res.json();
+      setPatients(patientsData);
+      console.log("Fetched patients:", patientsData);
+    } catch (error) {
+      console.error("Error fetching patients:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPatients()
+  }, [])
 
   return (
     <>
@@ -164,9 +192,9 @@ export default function PatientManagement() {
                   />
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => setIsInviteDialogOpen(false)}
                     disabled={isSubmitting}
                   >
@@ -219,7 +247,7 @@ export default function PatientManagement() {
                     {loading ? (
                       <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                     ) : (
-                      stats?.active ?? (Array.isArray(patients) ? patients.filter((p) => p.status === "Active").length : 0)
+                      stats?.active ?? (Array.isArray(patients) ? patients.filter((p) => p && p.status === "Active").length : 0)
                     )}
                   </p>
                 </div>
@@ -236,7 +264,7 @@ export default function PatientManagement() {
                     {loading ? (
                       <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                     ) : (
-                      stats?.invited ?? (Array.isArray(patients) ? patients.filter((p) => p.status === "Invited").length : 0)
+                      stats?.invited ?? (Array.isArray(patients) ? patients.filter((p) => p && p.status === "Invited").length : 0)
                     )}
                   </p>
                 </div>
@@ -289,12 +317,14 @@ export default function PatientManagement() {
                 <TableBody>
                   {patients.map((patient) => (
                     <TableRow key={patient.id}>
-                      <TableCell className="font-medium">{patient.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {patient.firstName} {patient.lastName}
+                      </TableCell>
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-sm">
                             <Mail className="w-3 h-3" />
-                            {patient.email}
+                            {patient.email || 'N/A'}
                           </div>
                           {patient.phone && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -306,13 +336,13 @@ export default function PatientManagement() {
                       </TableCell>
                       <TableCell>
                         <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(patient.status)}`}
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(patient.status || 'Inactive')}`}
                         >
-                          {patient.status}
+                          {patient.status || 'Inactive'}
                         </span>
                       </TableCell>
-                      <TableCell>{patient.date_added}</TableCell>
-                      <TableCell>{patient.last_activity}</TableCell>
+                      <TableCell>{patient.createdAt ? new Date(patient.createdAt).toLocaleDateString() : 'N/A'}</TableCell>
+                      <TableCell>{patient.lastInteraction ? new Date(patient.lastInteraction).toLocaleDateString() : 'N/A'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button variant="ghost" size="sm">

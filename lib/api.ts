@@ -3,6 +3,8 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 export interface Patient {
   id: string
   name: string
+  firstName: string
+  lastName: string
   email: string
   phone: string
   date_added: string

@@ -17,6 +17,11 @@ export default function SettingsPage() {
     address: "",
     phone: "",
     email: "",
+    tagline: "",
+    logoUrl: "",
+    logoFile: null as File | null,
+    logoPreview: null as string | null,
+    brandColor: "#3B82F6",
   })
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
@@ -28,6 +33,7 @@ export default function SettingsPage() {
   const [facilityBilling, setFacilityBilling] = useState({
     monthlyPrice: "",      // e.g. "25"
     promoCode: "",         // e.g. "FREE2025"
+    stripePriceId: "",     // Stripe price ID
   });
   const [billingSaveStatus, setBillingSaveStatus] = useState("");
 
@@ -42,9 +48,28 @@ export default function SettingsPage() {
           address: data.address || "",
           phone: data.phone || "",
           email: data.adminEmail || data.email || "",
+          tagline: data.tagline || "",
+          logoUrl: data.logoUrl || "",
+          logoFile: null,
+          logoPreview: null,
+          brandColor: data.brandColor || "#3B82F6",
         })
       })
       .catch(() => setSaveStatus("Failed to load facility info"));
+
+    // Load billing settings
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
+      // credentials: "include"
+    })
+      .then(res => res.json())
+      .then(data => {
+        setFacilityBilling({
+          monthlyPrice: data.monthlyPrice || "",
+          promoCode: data.promoCode || "",
+          stripePriceId: data.stripePriceId || "",
+        })
+      })
+      .catch(() => setBillingSaveStatus("Failed to load billing settings"));
   }, [])
 
   const handleSave = async () => {
@@ -63,7 +88,30 @@ export default function SettingsPage() {
   }
 
   const handleSaveBilling = async () => {
+    setBillingSaveStatus("");
+    
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          monthlyPrice: facilityBilling.monthlyPrice,
+          promoCode: facilityBilling.promoCode,
+        }),
+      });
 
+      if (res.ok) {
+        setBillingSaveStatus("Saved!");
+        // Clear status after 3 seconds
+        setTimeout(() => setBillingSaveStatus(""), 3000);
+      } else {
+        const errorData = await res.json();
+        setBillingSaveStatus(errorData.message || "Failed to save billing settings");
+      }
+    } catch (error) {
+      console.error("Error saving billing settings:", error);
+      setBillingSaveStatus("Failed to save billing settings");
+    }
   }
 
   return (
@@ -155,12 +203,16 @@ export default function SettingsPage() {
                       const file = e.target.files?.[0];
                       if (file) {
                         // Only set in UI state for now; handle upload in backend logic if/when needed
-                        setFacilityInfo({ ...facilityInfo, logoFile: file });
+                        setFacilityInfo(prev => ({ ...prev, logoFile: file }));
 
                         // Optional: Local preview (does NOT affect backend)
                         const reader = new FileReader();
                         reader.onload = () => {
-                          setFacilityInfo((prev) => ({ ...prev, logoPreview: reader.result }));
+                          const result = reader.result;
+                          setFacilityInfo(prev => ({
+                            ...prev,
+                            logoPreview: typeof result === 'string' ? result : null
+                          }));
                         };
                         reader.readAsDataURL(file);
                       }
@@ -269,6 +321,10 @@ export default function SettingsPage() {
                     <span>
                       <span className="text-gray-600">Promo Code: </span>
                       <span className="font-mono">{facilityBilling.promoCode || <span className="text-gray-400">None set</span>}</span>
+                    </span>
+                    <span>
+                      <span className="text-gray-600">Stripe Price ID: </span>
+                      <span className="font-mono text-sm">{facilityBilling.stripePriceId || <span className="text-gray-400">Not configured</span>}</span>
                     </span>
                   </div>
                 </CardContent>
