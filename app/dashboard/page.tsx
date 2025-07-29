@@ -23,10 +23,10 @@ export default function FacilityDashboard() {
     try {
       const [patientsRes, statusRes] = await Promise.all([
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, { 
-          // credentials: "include" 
+          credentials: "include" 
         }),
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts`, { 
-          // credentials: "include" 
+          credentials: "include" 
         }),
       ]);
   
@@ -54,10 +54,10 @@ export default function FacilityDashboard() {
       setIsLoading(true); // Start loading
       Promise.all([
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, { 
-          // credentials: "include" 
+          credentials: "include" 
         }).then(res => res.json()),
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts`, { 
-          // credentials: "include" 
+          credentials: "include" 
         }).then(res => res.json())
       ]).then(([patientsData, statusData]) => {
         setStatus(s => ({ ...s, totalPatients: patientsData.length }));

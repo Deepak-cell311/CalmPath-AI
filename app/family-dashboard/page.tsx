@@ -51,6 +51,8 @@ interface Reminder {
 
 export default function FamilyDashboard() {
     const loading = useAuthRedirect();
+    // if (loading) return <div>Loading...</div>;
+
     const [photos, setPhotos] = useState<MemoryPhoto[]>([])
     const [patientId, setPatientId] = useState<number>(1); // Set default patient ID to 1
     const [isLoading, setIsLoading] = useState(false);
@@ -90,6 +92,14 @@ export default function FamilyDashboard() {
         frequency: "",
         time: "",
     });
+    const [facilityBilling, setFacilityBilling] = useState({
+        monthlyPrice: "",      // e.g. "25"
+        promoCode: "",         // e.g. "FREE2025"
+    });
+    const [user, setUser] = useState<any>(null)
+    const router = useRouter()
+
+
     const fetchExistingPhotos = async () => {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos`, {
@@ -149,11 +159,9 @@ export default function FamilyDashboard() {
         fetchFacilityBilling();
     }, []);
 
-    useEffect(() => {
-        fetchReminders();
-    }, [patientId]);
 
-    if (loading) return <div>Loading...</div>;
+
+
 
     const handleAddMedication = async () => {
         if (!newMedication.name || !newMedication.dosage || !newMedication.frequency || !newMedication.time || !patientId) return;
@@ -245,10 +253,6 @@ export default function FamilyDashboard() {
         }
     };
 
-    const [facilityBilling, setFacilityBilling] = useState({
-        monthlyPrice: "",      // e.g. "25"
-        promoCode: "",         // e.g. "FREE2025"
-    });
 
 
 
@@ -293,6 +297,9 @@ export default function FamilyDashboard() {
             console.error("Error fetching reminders:", error);
         }
     };
+
+
+
 
     // Add reminder
     const handleAddReminder = async () => {
@@ -479,6 +486,34 @@ export default function FamilyDashboard() {
         }
     }
 
+    const handleLogout = async () => {
+        try {
+            // Call logout API if available
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout`, {
+                method: "POST",
+                credentials: "include"
+            })
+        } catch (error) {
+            console.error("Error during logout:", error)
+        }
+
+        // Clear any stored auth tokens/data
+        localStorage.removeItem("authToken")
+        localStorage.removeItem("user")
+        sessionStorage.clear()
+        setUser(null)
+
+        // Redirect to login page
+        router.push("/auth/login")
+    }
+
+
+    useEffect(() => {
+        if (patientId) {
+            fetchReminders();
+        }
+    }, [patientId]);
+
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
@@ -497,7 +532,7 @@ export default function FamilyDashboard() {
                             <User className="w-4 h-4 mr-2" />
                             John Smith
                         </Button>
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" onClick={handleLogout}>
                             <LogOut className="w-4 h-4" />
                         </Button>
                     </div>

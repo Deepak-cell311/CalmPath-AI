@@ -1,8 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
+import { useRouter } from "next/navigation" // Import useRouter
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,16 +11,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Heart, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
-
-
 export default function LoginPage() {
+  const router = useRouter() // Initialize useRouter
   const [userType, setUserType] = useState<"Patient" | "Family Member" | "Facility Staff" | "">("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,7 +28,7 @@ export default function LoginPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // credentials: "include", 
+        credentials: "include", // Make sure this is uncommented if your backend uses cookies
         body: JSON.stringify({
           email, password, accountType: userType
         }),
@@ -39,24 +36,25 @@ export default function LoginPage() {
 
       const result = await response.json();
       console.log("Result: ", result);
-      
+
       if (response.ok && result.success) {
         const { user } = result
 
-        // Redirect based on user type
+        // Use router.push for navigation
         if (user.accountType === "Patient") {
-          window.location.href = "/"
+          router.push("/")
         } else if (user.accountType === "Family Member") {
-          window.location.href = "/family-dashboard"
+          router.push("/family-dashboard")
         } else if (user.accountType === "Facility Staff") {
-          window.location.href = "/dashboard"
+          router.push("/dashboard")
         }
       } else {
-        setError("Login failed. Please try again.")
+        setError(result.message || "Login failed. Please try again.") // Display specific error from backend
       }
     } catch (err: any) {
       console.error("Login error:", err)
-      const message = err.response?.data?.error || "Something went wrong. Try again."
+      // Check if err has a response object with data and error message
+      const message = err.response?.data?.error || err.message || "Something went wrong. Try again."
       setError(message)
     } finally {
       setIsLoading(false)
@@ -124,6 +122,8 @@ export default function LoginPage() {
                   required
                 />
               </div>
+
+              {error && <p className="text-red-500 text-sm">{error}</p>} {/* Display error message */}
 
               <Button type="submit" className="w-full" disabled={isLoading || !userType}>
                 {isLoading ? "Signing in..." : "Sign In"}
