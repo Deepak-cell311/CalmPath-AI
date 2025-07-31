@@ -98,6 +98,7 @@ export default function FamilyDashboard() {
         promoCode: "",         // e.g. "FREE2025"
     });
     const [user, setUser] = useState<any>(null)
+    const [userUsedInviteCode, setUserUsedInviteCode] = useState(false)
     const router = useRouter()
     const [notifiedReminders, setNotifiedReminders] = useState<number[]>([]);
     const [notificationList, setNotificationList] = useState<{id: number, message: string, time: string, seen: boolean}[]>([]);
@@ -130,7 +131,24 @@ export default function FamilyDashboard() {
 
     useEffect(() => {
         fetchExistingPhotos();
+        fetchUserInviteStatus();
     }, []);
+
+    const fetchUserInviteStatus = async () => {
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/currentUser`, {
+                credentials: "include"
+            });
+            
+            if (response.ok) {
+                const userData = await response.json();
+                setUser(userData);
+                setUserUsedInviteCode(userData.usedInviteCode || false);
+            }
+        } catch (error) {
+            console.error("Error fetching user invite status:", error);
+        }
+    }
 
     useEffect(() => {
         if (!patientId) return;
@@ -993,49 +1011,65 @@ export default function FamilyDashboard() {
                                     {/* Payment Option */}
                                     <div className="space-y-2">
                                         <h3 className="font-semibold">Pay & Subscribe</h3>
-                                        <p className="text-gray-600 mb-2">
-                                            Monthly price:
-                                            {discountAmount && discountType ? (
-                                                <span className="font-medium text-green-600">
-                                                    $
-                                                    {discountType === "percent"
-                                                        ? (Number(facilityMonthlyPrice) * (1 - Number(discountAmount) / 100)).toFixed(2)
-                                                        : Math.max(Number(facilityMonthlyPrice) - Number(discountAmount), 0).toFixed(2)}
-                                                </span>
-                                            ) : (
-                                                <span className="font-medium text-primary">${facilityMonthlyPrice}</span>
-                                            )}
-                                        </p>
-                                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                            onClick={handleStartSubscription}
-                                            disabled={isLoading}
-                                        >
-                                            <CreditCard className="w-4 h-4 mr-2" />
-                                            {isLoading ? "Processing..." : "Subscribe"}
-                                        </Button>
+                                        {userUsedInviteCode ? (
+                                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                                <div className="flex items-center gap-2 text-green-700">
+                                                    <CreditCard className="w-4 h-4" />
+                                                    <span className="font-medium">Free Access Granted</span>
+                                                </div>
+                                                <p className="text-sm text-green-600 mt-1">
+                                                    You have free access to this facility through your invite code.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <p className="text-gray-600 mb-2">
+                                                    Monthly price:
+                                                    {discountAmount && discountType ? (
+                                                        <span className="font-medium text-green-600">
+                                                            $
+                                                            {discountType === "percent"
+                                                                ? (Number(facilityMonthlyPrice) * (1 - Number(discountAmount) / 100)).toFixed(2)
+                                                                : Math.max(Number(facilityMonthlyPrice) - Number(discountAmount), 0).toFixed(2)}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="font-medium text-primary">${facilityMonthlyPrice}</span>
+                                                    )}
+                                                </p>
+                                                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                                    onClick={handleStartSubscription}
+                                                    disabled={isLoading}
+                                                >
+                                                    <CreditCard className="w-4 h-4 mr-2" />
+                                                    {isLoading ? "Processing..." : "Subscribe"}
+                                                </Button>
+                                            </>
+                                        )}
                                     </div>
                                     <div className="flex items-center justify-center my-4">
                                         <span className="text-gray-400 text-xs uppercase">or</span>
                                     </div>
                                     {/* Promo Code Option */}
-                                    <div className="space-y-2">
-                                        <h3 className="font-semibold">Have a Promo Code?</h3>
-                                        <Input
-                                            id="promoCode"
-                                            value={userPromoCode}
-                                            onChange={e => setUserPromoCode(e.target.value)}
-                                            placeholder="Enter promo code"
-                                            maxLength={24}
-                                        />
-                                        <Button className="w-full mt-2" variant="outline" onClick={handleApplyPromoCode}>
-                                            Apply Promo Code
-                                        </Button>
-                                        {promoCodeStatus && (
-                                            <p className="text-sm mt-2" style={{ color: promoCodeStatus === "Access Granted!" ? "green" : "red" }}>
-                                                {promoCodeStatus}
-                                            </p>
-                                        )}
-                                    </div>
+                                    {!userUsedInviteCode && (
+                                        <div className="space-y-2">
+                                            <h3 className="font-semibold">Have a Promo Code?</h3>
+                                            <Input
+                                                id="promoCode"
+                                                value={userPromoCode}
+                                                onChange={e => setUserPromoCode(e.target.value)}
+                                                placeholder="Enter promo code"
+                                                maxLength={24}
+                                            />
+                                            <Button className="w-full mt-2" variant="outline" onClick={handleApplyPromoCode}>
+                                                Apply Promo Code
+                                            </Button>
+                                            {promoCodeStatus && (
+                                                <p className="text-sm mt-2" style={{ color: promoCodeStatus === "Access Granted!" ? "green" : "red" }}>
+                                                    {promoCodeStatus}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>

@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { CreditCard, DollarSign, Download, Bell, Building } from "lucide-react"
+import { CreditCard, DollarSign, Download, Bell, Building, Users, Gift } from "lucide-react"
 
 export default function SettingsPage() {
   const [facilityInfo, setFacilityInfo] = useState({
@@ -39,7 +39,31 @@ export default function SettingsPage() {
   });
   const [billingSaveStatus, setBillingSaveStatus] = useState("");
 
+  // Invite system state
+  const [invitePackages, setInvitePackages] = useState([]);
+  const [invitePurchases, setInvitePurchases] = useState([]);
+  const [availableInvites, setAvailableInvites] = useState([]);
+  const [isLoadingInvites, setIsLoadingInvites] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState("");
+
   useEffect(() => {
+    // Check for success/cancel from Stripe checkout
+    const urlParams = new URLSearchParams(window.location.search);
+    const success = urlParams.get('success');
+    const canceled = urlParams.get('canceled');
+    
+    if (success) {
+      setInviteStatus("Payment successful! Your invites will be available shortly.");
+      // Reload invite data after successful payment
+      setTimeout(() => {
+        loadInviteData();
+        setInviteStatus("");
+      }, 3000);
+    } else if (canceled) {
+      setInviteStatus("Payment was canceled.");
+      setTimeout(() => setInviteStatus(""), 3000);
+    }
+
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
       // credentials: "include"
     })
@@ -73,7 +97,35 @@ export default function SettingsPage() {
         })
       })
       .catch(() => setBillingSaveStatus("Failed to load billing settings"));
+
+    // Load invite system data
+    loadInviteData();
   }, [])
+
+  const loadInviteData = async () => {
+    setIsLoadingInvites(true);
+    try {
+      // Load invite packages
+      const packagesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-packages`);
+      const packagesData = await packagesRes.json();
+      setInvitePackages(packagesData);
+
+      // Load invite purchases
+      const purchasesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-purchases`);
+      const purchasesData = await purchasesRes.json();
+      setInvitePurchases(purchasesData);
+
+      // Load available invites
+      const invitesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/available-invites`);
+      const invitesData = await invitesRes.json();
+      setAvailableInvites(invitesData);
+    } catch (error) {
+      console.error("Error loading invite data:", error);
+      setInviteStatus("Failed to load invite data");
+    } finally {
+      setIsLoadingInvites(false);
+    }
+  };
 
   const handleSave = async () => {
     console.log("handleSave called");
@@ -151,6 +203,74 @@ export default function SettingsPage() {
     setFacilityInfo(prev => ({ ...prev, logoUrl: data.logoUrl }));
   };
 
+  const handlePurchaseInvites = async (packageId: number) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/purchase-invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ packageId }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok && data.url) {
+        // Redirect to Stripe checkout
+        window.location.href = data.url;
+      } else {
+        setInviteStatus("Failed to create checkout session");
+      }
+    } catch (error) {
+      console.error("Error purchasing invites:", error);
+      setInviteStatus("Failed to purchase invites");
+    }
+  };
+
+  const handleCreateInvites = async (purchaseId: number, inviteCount: number) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/create-invites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchaseId, inviteCount }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setInviteStatus("Invite codes created successfully!");
+        loadInviteData(); // Reload data
+        setTimeout(() => setInviteStatus(""), 3000);
+      } else {
+        setInviteStatus(data.message || "Failed to create invite codes");
+      }
+    } catch (error) {
+      console.error("Error creating invites:", error);
+      setInviteStatus("Failed to create invite codes");
+    }
+  };
+
+  const handleCompletePurchase = async (sessionId: string) => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/test-webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setInviteStatus("Purchase completed successfully!");
+        loadInviteData(); // Reload data
+        setTimeout(() => setInviteStatus(""), 3000);
+      } else {
+        setInviteStatus(data.message || "Failed to complete purchase");
+      }
+    } catch (error) {
+      console.error("Error completing purchase:", error);
+      setInviteStatus("Failed to complete purchase");
+    }
+  };
+
   return (
     <>
       {/* Header */}
@@ -167,11 +287,10 @@ export default function SettingsPage() {
       {/* Main Content */}
       <main className="p-6">
         <Tabs defaultValue="facility" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="facility">Facility Info</TabsTrigger>
             <TabsTrigger value="billing">Billing & Subscription</TabsTrigger>
-            {/* <TabsTrigger value="payouts">Commission Payouts</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger> */}
+            <TabsTrigger value="invites">Flat Payment Invites</TabsTrigger>
           </TabsList>
 
           {/* Facility Information */}
@@ -365,6 +484,143 @@ export default function SettingsPage() {
                       <span className="font-mono text-sm">{facilityBilling.stripePriceId || <span className="text-gray-400">Not configured</span>}</span>
                     </span>
                   </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Flat Payment Invite System */}
+          <TabsContent value="invites">
+            <div className="space-y-6">
+              {/* Available Packages */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Gift className="w-5 h-5" />
+                    Purchase Invite Packages
+                  </CardTitle>
+                  <p className="text-gray-600 text-sm mt-2">
+                    Purchase invite packages to give access to your facility. Users with invite codes will get free access without needing to pay individually.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingInvites ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                      <p className="mt-2 text-gray-600">Loading packages...</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {invitePackages.map((pkg: any) => (
+                        <Card key={pkg.id} className="border-2 hover:border-blue-300 transition-colors">
+                          <CardContent className="p-4">
+                            <div className="text-center">
+                              <h3 className="font-semibold text-lg">{pkg.packageName}</h3>
+                              <p className="text-2xl font-bold text-blue-600 mt-2">
+                                ${(pkg.priceInCents / 100).toFixed(0)}
+                              </p>
+                              <p className="text-gray-600 text-sm mt-1">
+                                {pkg.inviteCount} invites
+                              </p>
+                              <Button 
+                                onClick={() => handlePurchaseInvites(pkg.id)}
+                                className="w-full mt-4"
+                                disabled={isLoadingInvites}
+                              >
+                                Purchase Package
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                  {inviteStatus && (
+                    <p className="text-sm mt-4 text-red-600">{inviteStatus}</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Purchase History */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Purchase History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {invitePurchases.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">No purchases yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {invitePurchases.map((purchase: any) => (
+                        <div key={purchase.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{purchase.inviteCount} invites</p>
+                            <p className="text-sm text-gray-600">
+                              ${(purchase.totalPaidInCents / 100).toFixed(2)} - {purchase.status}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(purchase.purchasedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={purchase.status === 'completed' ? 'default' : 'secondary'}>
+                              {purchase.status}
+                            </Badge>
+                            {purchase.status === 'pending' && purchase.stripeSessionId && (
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => handleCompletePurchase(purchase.stripeSessionId)}
+                                disabled={isLoadingInvites}
+                              >
+                                Complete Purchase
+                              </Button>
+                            )}
+                            {purchase.status === 'completed' && (
+                              <Button 
+                                size="sm" 
+                                onClick={() => handleCreateInvites(purchase.id, purchase.inviteCount)}
+                                disabled={isLoadingInvites}
+                              >
+                                Generate Invites
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Available Invites */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Available Invite Codes
+                  </CardTitle>
+                  <p className="text-gray-600 text-sm mt-2">
+                    These are the invite codes you can share with users. Each code can be used once to give free access to your facility.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  {availableInvites.length === 0 ? (
+                    <p className="text-gray-500 text-center py-4">No available invites. Purchase a package to get invite codes.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {availableInvites.map((invite: any) => (
+                        <div key={invite.id} className="p-3 border rounded-lg bg-gray-50">
+                          <p className="font-mono text-sm bg-white p-2 rounded border text-center">
+                            {invite.inviteCode}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1 text-center">
+                            Expires: {new Date(invite.expiresAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -4,154 +4,108 @@ import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { X, Bell, CheckCircle } from "lucide-react"
-
-interface NotificationProps {
-  message: string
-  scheduledTime: string
-  reminderId: number
-  onDismiss: (reminderId: number) => void
-  onComplete: (reminderId: number) => void
-}
-
-export function Notification({ message, scheduledTime, reminderId, onDismiss, onComplete }: NotificationProps) {
-  const [isVisible, setIsVisible] = useState(true)
-
-  const handleDismiss = () => {
-    setIsVisible(false)
-    setTimeout(() => onDismiss(reminderId), 300) // Allow animation to complete
-  }
-
-  const handleComplete = () => {
-    setIsVisible(false)
-    setTimeout(() => onComplete(reminderId), 300) // Allow animation to complete
-  }
-
-  if (!isVisible) return null
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="w-full max-w-md mx-4 animate-in slide-in-from-bottom-4">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <div className="flex items-center space-x-2">
-            <Bell className="h-5 w-5 text-blue-500" />
-            <CardTitle className="text-lg">Reminder</CardTitle>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDismiss}
-            className="h-6 w-6 p-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <p className="text-sm text-gray-600">
-              {new Date(scheduledTime).toLocaleString()}
-            </p>
-            <p className="text-base">{message}</p>
-          </div>
-          <div className="flex space-x-2">
-            <Button
-              onClick={handleComplete}
-              className="flex-1 bg-green-500 hover:bg-green-600"
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Mark Complete
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleDismiss}
-              className="flex-1"
-            >
-              Dismiss
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
+import { toast } from "@/hooks/use-toast"
 
 interface NotificationManagerProps {
   patientId: number
 }
 
 export function NotificationManager({ patientId }: NotificationManagerProps) {
-  const [notifications, setNotifications] = useState<any[]>([])
-  const [isChecking, setIsChecking] = useState(false)
+  const [notifiedReminders, setNotifiedReminders] = useState<number[]>([]);
+  const [notificationList, setNotificationList] = useState<{id: number, message: string, time: string, seen: boolean}[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [reminders, setReminders] = useState<any[]>([]);
 
-  const checkForReminders = async () => {
-    if (isChecking) return
-    setIsChecking(true)
-
+  // Fetch reminders
+  const fetchReminders = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/reminders/active`)
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/reminders`);
       if (response.ok) {
-        const reminders = await response.json()
-        const now = new Date()
-        
-        // Filter reminders that are due (within 5 minutes of scheduled time)
-        const dueReminders = reminders.filter((reminder: any) => {
-          const scheduledTime = new Date(reminder.scheduledTime)
-          const timeDiff = Math.abs(now.getTime() - scheduledTime.getTime())
-          const fiveMinutes = 5 * 60 * 1000
-          return timeDiff <= fiveMinutes && !reminder.isCompleted
-        })
-
-        // Add new notifications
-        setNotifications(prev => {
-          const existingIds = prev.map(n => n.id)
-          const newNotifications = dueReminders.filter((r: any) => !existingIds.includes(r.id))
-          return [...prev, ...newNotifications]
-        })
+        const data = await response.json();
+        setReminders(data);
       }
     } catch (error) {
-      console.error("Error checking reminders:", error)
-    } finally {
-      setIsChecking(false)
+      console.error("Error fetching reminders:", error);
     }
-  }
+  };
 
-  const handleDismissNotification = (reminderId: number) => {
-    setNotifications(prev => prev.filter(n => n.id !== reminderId))
-  }
-
-  const handleCompleteNotification = async (reminderId: number) => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/reminders/${reminderId}/complete`, {
-        method: "POST",
-      })
-      
-      if (response.ok) {
-        setNotifications(prev => prev.filter(n => n.id !== reminderId))
-      }
-    } catch (error) {
-      console.error("Error completing reminder:", error)
-    }
-  }
-
-  // Check for reminders every minute
+  // Check for due reminders every second
   useEffect(() => {
-    const interval = setInterval(checkForReminders, 60000) // Check every minute
-    checkForReminders() // Check immediately on mount
+    const interval = setInterval(() => {
+      const now = new Date();
+      reminders.forEach(reminder => {
+        const reminderTime = new Date(reminder.scheduledTime);
+        if (
+          reminderTime <= now &&
+          !notifiedReminders.includes(reminder.id) &&
+          !reminder.isCompleted
+        ) {
+          toast({
+            title: "Reminder",
+            description: reminder.message,
+          });
+          setNotifiedReminders(prev => [...prev, reminder.id]);
+          setNotificationList(prev => [
+            { id: reminder.id, message: reminder.message, time: reminder.scheduledTime, seen: false },
+            ...prev,
+          ]);
+        }
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [reminders, notifiedReminders]);
 
-    return () => clearInterval(interval)
-  }, [patientId])
+  // Fetch reminders on mount
+  useEffect(() => {
+    fetchReminders();
+  }, [patientId]);
 
   return (
-    <>
-      {notifications.map((notification) => (
-        <Notification
-          key={notification.id}
-          message={notification.message}
-          scheduledTime={notification.scheduledTime}
-          reminderId={notification.id}
-          onDismiss={handleDismissNotification}
-          onComplete={handleCompleteNotification}
-        />
-      ))}
-    </>
+    <div className="fixed top-4 right-4 z-50">
+      <div className="relative">
+        <button
+          className="relative focus:outline-none bg-white rounded-full p-2 shadow-lg border"
+          onClick={() => {
+            setShowNotifications((prev) => !prev);
+            // Mark all as seen when opening
+            setNotificationList((prev) => prev.map(n => ({ ...n, seen: true })));
+          }}
+        >
+          <Bell className="w-5 h-5 text-gray-600" />
+          {notificationList.filter(n => !n.seen).length > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
+              {notificationList.filter(n => !n.seen).length}
+            </span>
+          )}
+        </button>
+        {showNotifications && (
+          <div className="absolute right-0 mt-2 w-80 bg-white border rounded-lg shadow-lg z-50">
+            <div className="flex items-center justify-between px-4 py-2 border-b">
+              <span className="font-semibold">Notifications</span>
+              <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600">
+                <span className="sr-only">Close</span>
+                &#10005;
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {notificationList.length === 0 ? (
+                <div className="p-4 text-gray-500 text-center">No notifications</div>
+              ) : (
+                notificationList.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`px-4 py-3 border-b last:border-b-0 ${n.seen ? 'bg-gray-100 text-gray-800 opacity-100' : 'bg-blue-50 text-blue-900 font-semibold'}`}
+                    style={n.seen ? { filter: 'blur(0.5px)' } : {}}
+                  >
+                    <div className="text-sm">{n.message}</div>
+                    <div className="text-xs mt-1">{new Date(n.time).toLocaleString()}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   )
 } 

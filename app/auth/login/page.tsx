@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Heart, ArrowLeft } from "lucide-react"
+import { Heart, ArrowLeft, Gift } from "lucide-react"
 import Link from "next/link"
 
 export default function LoginPage() {
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [userType, setUserType] = useState<"Patient" | "Family Member" | "Facility Staff" | "">("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [inviteCode, setInviteCode] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -30,7 +31,10 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include", // Make sure this is uncommented if your backend uses cookies
         body: JSON.stringify({
-          email, password, accountType: userType
+          email, 
+          password, 
+          accountType: userType,
+          inviteCode: inviteCode.trim() || undefined // Only send if not empty
         }),
       });
 
@@ -42,7 +46,7 @@ export default function LoginPage() {
 
         // Use router.push for navigation
         if (user.accountType === "Patient") {
-          router.push("/")
+          router.push("/family-dashboard")
         } else if (user.accountType === "Family Member") {
           router.push("/family-dashboard")
         } else if (user.accountType === "Facility Staff") {
@@ -121,6 +125,23 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="inviteCode" className="flex items-center gap-2">
+                  <Gift className="w-4 h-4" />
+                  Invite Code (Optional)
+                </Label>
+                <Input
+                  id="inviteCode"
+                  type="text"
+                  placeholder="Enter invite code if you have one"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                />
+                <p className="text-xs text-gray-500">
+                  If you have an invite code, enter it here to get free access to the facility.
+                </p>
               </div>
 
               {error && <p className="text-red-500 text-sm">{error}</p>} {/* Display error message */}
