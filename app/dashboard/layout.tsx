@@ -24,28 +24,8 @@ function AppSidebar() {
 
   // Redirect to login if not authenticated
   useEffect(() => {
-<<<<<<< HEAD
     if (!isLoading && !user) {
       router.push("/auth/login")
-=======
-    // Fetch user data from API
-    const fetchUser = async () => {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`, {
-          credentials: "include"
-        })
-        if (response.ok) {
-          const userData = await response.json()
-          setUser(userData)
-          // Store in localStorage for persistence
-          localStorage.setItem("user", JSON.stringify(userData))
-        } else {
-          console.log("Failed to fetch user data")
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error)
-      }
->>>>>>> 62a2beb7e770fde03e34ef49273242aaeab06638
     }
   }, [user, isLoading, router])
 
