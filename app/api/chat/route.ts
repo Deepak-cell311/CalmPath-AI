@@ -18,7 +18,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Search for relevant photos based on the message - make search more aggressive
-    const photoResponse = await fetch(`${request.nextUrl.origin}/api/photos?query=${encodeURIComponent(message)}`)
+    const photoResponse = await fetch(`${request.nextUrl.origin}/api/photos?query=${encodeURIComponent(message)}`, {
+      credentials: 'include'
+    })
     const photoData = await photoResponse.json()
     const relevantPhotos = photoData.photos || []
 

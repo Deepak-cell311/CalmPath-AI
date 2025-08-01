@@ -109,7 +109,7 @@ export default function FamilyDashboard() {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos`, {
                 method: "GET",
-                // credentials: "include",
+                credentials: "include",
             });
 
             const result = await response.json();
@@ -153,7 +153,7 @@ export default function FamilyDashboard() {
     useEffect(() => {
         if (!patientId) return;
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/medications`, {
-            //credentials: "include" 
+            credentials: "include" 
         })
             .then((res) => res.json())
             .then((data) => {
@@ -165,7 +165,9 @@ export default function FamilyDashboard() {
     // Fetch facility billing settings
     const fetchFacilityBilling = async () => {
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`);
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
+                credentials: 'include'
+            });
             if (res.ok) {
                 const data = await res.json();
                 setFacilityMonthlyPrice(data.monthlyPrice || "25");
@@ -316,7 +318,9 @@ export default function FamilyDashboard() {
             }
 
             console.log("Fetching reminders for patient:", patientId);
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/reminders`);
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/reminders`, {
+                credentials: 'include'
+            });
             console.log("Fetch reminders response status:", response.status);
 
             if (response.ok) {

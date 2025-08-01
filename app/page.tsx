@@ -446,7 +446,9 @@ export default function PatientInterface() {
         ) {
           // Manually fetch home photos
           try {
-            const photoResponse = await fetch(`/api/photos?query=home house family`)
+            const photoResponse = await fetch(`/api/photos?query=home house family`, {
+                credentials: 'include'
+            })
             const photoData = await photoResponse.json()
             photosToShow = photoData.photos || []
             console.log("Manually fetched home photos:", photosToShow.length)
@@ -467,7 +469,9 @@ export default function PatientInterface() {
       let fallbackPhotos = undefined
       if (messageLower.includes("home") || messageLower.includes("house")) {
         try {
-          const photoResponse = await fetch(`/api/photos?query=home`)
+          const photoResponse = await fetch(`/api/photos?query=home`, {
+            credentials: 'include'
+          })
           const photoData = await photoResponse.json()
           fallbackPhotos = photoData.photos || []
         } catch (error) {
