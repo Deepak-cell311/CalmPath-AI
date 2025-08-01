@@ -15,34 +15,19 @@ import {
 } from "@/components/ui/sidebar"
 import { BarChart3, Users, Settings, User, LogOut } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
+import { useAuth } from "@/hooks/useAuth"
 
 function AppSidebar() {
   const router = useRouter()
   const pathname = usePathname()
-  const [user, setUser] = useState<any>(null)
+  const { user, logout, isLoading } = useAuth()
 
+  // Redirect to login if not authenticated
   useEffect(() => {
-    // Fetch user data from API
-    const fetchUser = async () => {
-      try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`, {
-          // credentials: "include"
-        })
-        if (response.ok) {
-          const userData = await response.json()
-          setUser(userData)
-          // Store in localStorage for persistence
-          localStorage.setItem("user", JSON.stringify(userData))
-        } else {
-          console.log("Failed to fetch user data")
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error)
-      }
+    if (!isLoading && !user) {
+      router.push("/auth/login")
     }
-
-    fetchUser()
-  }, [])
+  }, [user, isLoading, router])
 
   const menuItems = [
     { title: "Dashboard", icon: BarChart3, href: "/dashboard" },
@@ -50,24 +35,8 @@ function AppSidebar() {
     { title: "Settings", icon: Settings, href: "/dashboard/settings" },
   ]
 
-  const handleLogout = async () => {
-    try {
-      // Call logout API if available
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout`, {
-        method: "POST",
-        credentials: "include"
-      })
-    } catch (error) {
-      console.error("Error during logout:", error)
-    }
-    
-    // Clear any stored auth tokens/data
-    localStorage.removeItem("authToken")
-    localStorage.removeItem("user")
-    sessionStorage.clear()
-    setUser(null)
-    
-    // Redirect to login page
+  const handleLogout = () => {
+    logout()
     router.push("/auth/login")
   }
 

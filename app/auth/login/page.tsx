@@ -11,9 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Heart, ArrowLeft, Gift, Mail } from "lucide-react"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useAuth } from "@/hooks/useAuth"
 
 export default function LoginPage() {
   const router = useRouter() // Initialize useRouter
+  const { login, inviteLogin } = useAuth()
   
   // Regular login state
   const [userType, setUserType] = useState<"Patient" | "Family Member" | "Facility Staff" | "">("")
@@ -36,40 +38,19 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // Make sure this is uncommented if your backend uses cookies
-        body: JSON.stringify({
-          email, 
-          password, 
-          accountType: userType,
-          inviteCode: inviteCode.trim() || undefined // Only send if not empty
-        }),
-      });
-
-      const result = await response.json();
-      console.log("Result: ", result);
-
-      if (response.ok && result.success) {
-        const { user } = result
-
-        // Use router.push for navigation
-        if (user.accountType === "Patient") {
-          router.push("/family-dashboard")
-        } else if (user.accountType === "Family Member") {
-          router.push("/family-dashboard")
-        } else if (user.accountType === "Facility Staff") {
-          router.push("/dashboard")
-        }
-      } else {
-        setError(result.message || "Login failed. Please try again.") // Display specific error from backend
+      await login(email, password, userType, inviteCode.trim() || undefined)
+      
+      // Navigate based on account type
+      if (userType === "Patient") {
+        router.push("/family-dashboard")
+      } else if (userType === "Family Member") {
+        router.push("/family-dashboard")
+      } else if (userType === "Facility Staff") {
+        router.push("/dashboard")
       }
     } catch (err: any) {
       console.error("Login error:", err)
-      // Check if err has a response object with data and error message
-      const message = err.response?.data?.error || err.message || "Something went wrong. Try again."
-      setError(message)
+      setError(err.message || "Login failed. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -81,38 +62,19 @@ export default function LoginPage() {
     setInviteError(null)
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/invite-login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          email: inviteEmail,
-          inviteCode: inviteCodeOnly.trim(),
-          accountType: inviteUserType
-        }),
-      });
-
-      const result = await response.json();
-      console.log("Invite Login Result: ", result);
-
-      if (response.ok && result.success) {
-        const { user } = result
-
-        // Use router.push for navigation
-        if (user.accountType === "Patient") {
-          router.push("/family-dashboard")
-        } else if (user.accountType === "Family Member") {
-          router.push("/family-dashboard")
-        } else if (user.accountType === "Facility Staff") {
-          router.push("/dashboard")
-        }
-      } else {
-        setInviteError(result.error || "Invite login failed. Please try again.")
+      await inviteLogin(inviteEmail, inviteCodeOnly.trim(), inviteUserType)
+      
+      // Navigate based on account type
+      if (inviteUserType === "Patient") {
+        router.push("/family-dashboard")
+      } else if (inviteUserType === "Family Member") {
+        router.push("/family-dashboard")
+      } else if (inviteUserType === "Facility Staff") {
+        router.push("/dashboard")
       }
     } catch (err: any) {
       console.error("Invite login error:", err)
-      const message = err.response?.data?.error || err.message || "Something went wrong. Try again."
-      setInviteError(message)
+      setInviteError(err.message || "Invite login failed. Please try again.")
     } finally {
       setIsInviteLoading(false)
     }

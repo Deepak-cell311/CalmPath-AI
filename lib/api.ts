@@ -36,6 +36,14 @@ export interface ApiResponse<T> {
 }
 
 class ApiClient {
+  private getAuthHeaders(): HeadersInit {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    }
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -44,7 +52,7 @@ class ApiClient {
       const url = `${API_BASE_URL}${endpoint}`
       const response = await fetch(url, {
         headers: {
-          'Content-Type': 'application/json',
+          ...this.getAuthHeaders(),
           ...options.headers,
         },
         ...options,
