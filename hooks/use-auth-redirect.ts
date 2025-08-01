@@ -8,12 +8,24 @@ export function useAuthRedirect() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user`, {
-          credentials: "include" // Essential for sending cookies
+        const token = localStorage.getItem('authToken');
+        
+        if (!token) {
+          console.error("No auth token found, redirecting to login.");
+          router.replace("/auth/login");
+          return;
+        }
+
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user-token`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         });
 
         if (res.status === 401) {
           console.error("Authentication required, redirecting to login.");
+          localStorage.removeItem('authToken'); // Clear invalid token
           router.replace("/auth/login"); // Redirect to login if unauthenticated
         } else if (!res.ok) {
           // Handle other non-200 responses if necessary
