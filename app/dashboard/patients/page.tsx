@@ -106,6 +106,7 @@ export default function PatientManagement() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: 'include',
       });
 
       if (!res.ok) {

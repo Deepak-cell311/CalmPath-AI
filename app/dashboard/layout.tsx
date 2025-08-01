@@ -26,7 +26,7 @@ function AppSidebar() {
     const fetchUser = async () => {
       try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/me`, {
-          // credentials: "include"
+          credentials: "include"
         })
         if (response.ok) {
           const userData = await response.json()

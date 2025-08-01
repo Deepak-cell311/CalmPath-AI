@@ -106,17 +106,23 @@ export default function SettingsPage() {
     setIsLoadingInvites(true);
     try {
       // Load invite packages
-      const packagesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-packages`);
+      const packagesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-packages`, {
+        credentials: 'include'
+      });
       const packagesData = await packagesRes.json();
       setInvitePackages(packagesData);
 
       // Load invite purchases
-      const purchasesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-purchases`);
+      const purchasesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-purchases`, {
+        credentials: 'include'
+      });
       const purchasesData = await purchasesRes.json();
       setInvitePurchases(purchasesData);
 
       // Load available invites
-      const invitesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/available-invites`);
+      const invitesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/available-invites`, {
+        credentials: 'include'
+      });
       const invitesData = await invitesRes.json();
       setAvailableInvites(invitesData);
     } catch (error) {
@@ -171,7 +177,9 @@ export default function SettingsPage() {
         
         // Refresh the billing data to show updated values
         setTimeout(() => {
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`)
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
+            credentials: 'include'
+          })
             .then(res => res.json())
             .then(data => {
               setFacilityBilling({
