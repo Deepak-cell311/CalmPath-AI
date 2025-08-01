@@ -55,7 +55,6 @@ class ApiClient {
           ...this.getAuthHeaders(),
           ...options.headers,
         },
-        credentials: 'include', // Add credentials to all API requests
         ...options,
       })
 

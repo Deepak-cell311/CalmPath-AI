@@ -136,8 +136,17 @@ export default function FamilyDashboard() {
 
     const fetchUserInviteStatus = async () => {
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/currentUser`, {
-                credentials: "include"
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                console.error("No auth token found");
+                return;
+            }
+            
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user-token`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
             });
             
             if (response.ok) {
@@ -526,16 +535,6 @@ export default function FamilyDashboard() {
     }
 
     const handleLogout = async () => {
-        try {
-            // Call logout API if available
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/logout`, {
-                method: "POST",
-                credentials: "include"
-            })
-        } catch (error) {
-            console.error("Error during logout:", error)
-        }
-
         // Clear any stored auth tokens/data
         localStorage.removeItem("authToken")
         localStorage.removeItem("user")
