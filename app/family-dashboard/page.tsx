@@ -104,6 +104,7 @@ export default function FamilyDashboard() {
     const [notificationList, setNotificationList] = useState<{id: number, message: string, time: string, seen: boolean}[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
 
+    
 
     const fetchExistingPhotos = async () => {
         try {
@@ -589,7 +590,7 @@ export default function FamilyDashboard() {
                         </div>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="relative">
+                        {/* <div className="relative">
                             <button
                                 className="relative focus:outline-none"
                                 onClick={() => {
@@ -632,10 +633,10 @@ export default function FamilyDashboard() {
                                     </div>
                                 </div>
                             )}
-                        </div>
+                        </div> */}
                         <Button variant="ghost" size="sm">
                             <User className="w-4 h-4 mr-2" />
-                            John Smith
+                            {user?.firstName} {user?.lastName}
                         </Button>
                         <Button variant="ghost" size="sm" onClick={handleLogout}>
                             <LogOut className="w-4 h-4" />

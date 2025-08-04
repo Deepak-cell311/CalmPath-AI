@@ -40,6 +40,8 @@ function AppSidebar() {
     router.push("/auth/login")
   }
 
+  console.log("User data: ", user)
+
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
@@ -75,8 +77,8 @@ function AppSidebar() {
             <User className="w-4 h-4" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium">{user?.firstName || "Staff"} {user?.lastName || "Member"}</p>
-            <p className="text-xs text-gray-600">Staff</p>
+            <p className="text-sm font-medium">{user?.firstName + " " + user?.lastName || "Staff"}</p>
+            <p className="text-xs text-gray-600">{user?.accountType || "Staff"}</p>
           </div>
           <button onClick={handleLogout} className="hover:bg-gray-200 p-1 rounded">
             <LogOut className="w-4 h-4 text-gray-400" />

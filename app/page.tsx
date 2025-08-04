@@ -1,1336 +1,155 @@
-"use client"
-
-import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Slider } from "@/components/ui/slider"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { NotificationManager } from "@/components/ui/notification"
-import {
-  Heart,
-  Mic,
-  Volume2,
-  Music,
-  Wind,
-  Camera,
-  Waves,
-  User,
-  MicOff,
-  VolumeX,
-  Shield,
-  LogIn,
-  Type,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react"
+import { Mic, Bell, Camera, Shield } from "lucide-react"
 import Link from "next/link"
 
-interface Message {
-  id: string
-  type: "user" | "ai"
-  content: string
-  timestamp: Date
-  photos?: MemoryPhoto[]
-}
-
-interface MemoryPhoto {
-  id: number
-  name: string
-  description: string
-  url: string
-  context: string
-  tags: string[]
-}
-
-// Extend Window interface for Speech Recognition
-declare global {
-  interface Window {
-    SpeechRecognition: any
-    webkitSpeechRecognition: any
-  }
-}
-
-export default function PatientInterface() {
-  const [volume, setVolume] = useState([100])
-  const [isListening, setIsListening] = useState(false)
-  const [currentActivity, setCurrentActivity] = useState<string | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [isBreathing, setIsBreathing] = useState(false)
-  const [breathingPhase, setBreathingPhase] = useState<"inhale" | "hold" | "exhale">("inhale")
-  const [breathingProgress, setBreathingProgress] = useState(0)
-  const [speechSupported, setSpeechSupported] = useState(false)
-  const [currentTranscript, setCurrentTranscript] = useState("")
-  const transcriptRef = useRef("")
-  const [showTextInput, setShowTextInput] = useState(false)
-  const [textInput, setTextInput] = useState("")
-  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null)
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([])
-  const [voiceLanguageFilter, setVoiceLanguageFilter] = useState<string>("all")
-  const [peacefulImages, setPeacefulImages] = useState([
-    "/placeholder.svg?height=400&width=600&text=Peaceful+Beach",
-    "/placeholder.svg?height=400&width=600&text=Mountain+Lake",
-    "/placeholder.svg?height=400&width=600&text=Forest+Path",
-    "/placeholder.svg?height=400&width=600&text=Sunset+Garden",
-    "/placeholder.svg?height=400&width=600&text=Calm+River",
-  ])
-  const [currentImageIndex, setCurrentImageIndex] = useState(0)
-  const [showingMemoryPhotos, setShowingMemoryPhotos] = useState<MemoryPhoto[]>([])
-  const [currentMemoryIndex, setCurrentMemoryIndex] = useState(0)
-  const recognitionRef = useRef<any>(null)
-  const breathingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const [voiceChatMode, setVoiceChatMode] = useState(false)
-  const lastHeardRef = useRef(Date.now())
-  const restartTimeout = useRef<NodeJS.Timeout | null>(null)
-  const [speechSynthesisSupported, setSpeechSynthesisSupported] = useState(false)
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      setSpeechSynthesisSupported(true)
-    }
-  }, [])
-
-  const comfortActivities = [
-    { name: "Peaceful Music", icon: Music },
-    { name: "Breathing", icon: Wind },
-    { name: "Memories", icon: Camera },
-    { name: "Peaceful Scene", icon: Waves },
-  ]
-
-  // Check for Speech Recognition support
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (SpeechRecognition) {
-      setSpeechSupported(true)
-      initializeSpeechRecognition()
-    } else {
-      setSpeechSupported(false)
-      console.log("Speech Recognition not supported")
-    }
-  }, [voiceChatMode])
-
-  // Load available voices
-  useEffect(() => {
-    const loadVoices = () => {
-      const voices = speechSynthesis.getVoices()
-      setAvailableVoices(voices)
-      // Try to select a pleasant default voice
-      const preferredVoice = voices.find(
-        (voice) =>
-          voice.name.includes("Samantha") ||
-          voice.name.includes("Karen") ||
-          voice.name.includes("Moira") ||
-          voice.name.includes("Female") ||
-          voice.lang.startsWith("en"),
-      )
-      if (preferredVoice && !selectedVoice) {
-        setSelectedVoice(preferredVoice)
-      }
-    }
-    loadVoices()
-    speechSynthesis.onvoiceschanged = loadVoices
-  }, [selectedVoice])
-
-  // Auto-change peaceful scene images
-  useEffect(() => {
-    if (currentActivity === "peaceful scene") {
-      const interval = setInterval(() => {
-        setCurrentImageIndex((prev) => (prev + 1) % peacefulImages.length)
-      }, 4000) // Change every 4 seconds
-      return () => clearInterval(interval)
-    }
-  }, [currentActivity, peacefulImages.length])
-
-  // Update transcriptRef whenever currentTranscript changes
-  useEffect(() => {
-    transcriptRef.current = currentTranscript
-  }, [currentTranscript])
-
-  // Auto-timeout: If no new speech in 1.5 seconds, stop listening and process transcript
-  useEffect(() => {
-    if (isListening) {
-      const interval = setInterval(() => {
-        if (Date.now() - lastHeardRef.current > 1500 && isListening) {
-          stopListening()
-        }
-      }, 200)
-      return () => clearInterval(interval)
-    }
-  }, [isListening])
-
-  // Realistic breathing animation with proper timing and phases
-  useEffect(() => {
-    if (isBreathing) {
-      const startTime = Date.now()
-      const inhaleTime = 4000 // 4 seconds inhale
-      const holdTime = 2000 // 2 seconds hold
-      const exhaleTime = 6000 // 6 seconds exhale
-      const totalCycle = inhaleTime + holdTime + exhaleTime
-
-      const updateBreathing = () => {
-        const elapsed = (Date.now() - startTime) % totalCycle
-
-        if (elapsed < inhaleTime) {
-          setBreathingPhase("inhale")
-          setBreathingProgress(elapsed / inhaleTime)
-        } else if (elapsed < inhaleTime + holdTime) {
-          setBreathingPhase("hold")
-          setBreathingProgress(1)
-        } else {
-          setBreathingPhase("exhale")
-          setBreathingProgress(1 - (elapsed - inhaleTime - holdTime) / exhaleTime)
-        }
-
-        if (isBreathing) {
-          requestAnimationFrame(updateBreathing)
-        }
-      }
-      updateBreathing()
-    }
-    return () => {
-      if (breathingIntervalRef.current) {
-        clearInterval(breathingIntervalRef.current)
-      }
-    }
-  }, [isBreathing])
-
-  // Initialize Speech Recognition with better permission handling
-  const initializeSpeechRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    recognitionRef.current = new SpeechRecognition()
-    recognitionRef.current.continuous = true
-    recognitionRef.current.interimResults = true
-    recognitionRef.current.lang = "en-US"
-    recognitionRef.current.maxAlternatives = 1
-
-    recognitionRef.current.onstart = () => {
-      console.log("Speech recognition started")
-      setIsListening(true)
-      setCurrentTranscript("")
-      transcriptRef.current = ""
-    }
-
-    recognitionRef.current.onresult = (event: any) => {
-      lastHeardRef.current = Date.now()
-      let interim = "",
-        final = ""
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript
-        if (event.results[i].isFinal) final += t
-        else interim += t
-      }
-      setCurrentTranscript(interim || final)
-      transcriptRef.current = interim || final
-      console.log("[SR] onresult", interim || final)
-    }
-
-    recognitionRef.current.onerror = (event: any) => {
-      console.error("Speech recognition error:", event.error)
-      setIsListening(false)
-      setCurrentTranscript("")
-      transcriptRef.current = ""
-      let errorMessage = "I'm having trouble hearing you. "
-      switch (event.error) {
-        case "no-speech":
-          errorMessage += "I didn't hear anything. Please try speaking again."
-          break
-        case "audio-capture":
-          errorMessage += "Please check your microphone connection."
-          break
-        case "not-allowed":
-          errorMessage += "Please allow microphone access and try again."
-          break
-        case "network":
-          errorMessage += "Please check your internet connection."
-          break
-        default:
-          errorMessage += "Please try again in a moment."
-      }
-      addErrorMessage(errorMessage)
-    }
-
-    recognitionRef.current.onend = () => {
-      console.log("Speech recognition ended")
-      const finalText = transcriptRef.current.trim()
-      console.log("Final transcript on end:", finalText)
-      if (finalText && finalText.length > 1) {
-        // Process the complete speech when recognition ends
-        handleSpeechResult(finalText)
-      } else if (voiceChatMode) {
-        // Debounce next start!
-        if (restartTimeout.current) clearTimeout(restartTimeout.current)
-        restartTimeout.current = setTimeout(() => {
-          if (voiceChatMode && !isListening && !speechSynthesis.speaking) {
-            startListening()
-          }
-        }, 200) // Reduced delay for faster restart
-      }
-      setIsListening(false)
-      setCurrentTranscript("")
-      transcriptRef.current = ""
-    }
-  }
-
-  // Start speech recognition with explicit permission request
-  const startListening = async () => {
-    if (!speechSupported) {
-      addErrorMessage("Speech recognition is not supported in your browser. Please try typing your message instead.")
-      setShowTextInput(true)
-      return
-    }
-    if (speechSynthesis.speaking) {
-      console.log("[SR] startListening blocked: TTS speaking")
-      return
-    }
-    if (isListening) {
-      console.log("[SR] startListening blocked: already listening")
-      return
-    }
-    try {
-      // Request microphone permission explicitly for iOS/iPhone
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        await navigator.mediaDevices.getUserMedia({ audio: true })
-      }
-      // If recognition is already running, stop it first, then start after a short delay
-      if (recognitionRef.current && isListening) {
-        recognitionRef.current.stop()
-        setTimeout(() => {
-          if (recognitionRef.current) recognitionRef.current.start()
-        }, 500) // 500ms delay to allow proper restart
-      } else if (recognitionRef.current) {
-        recognitionRef.current.start()
-      }
-      lastHeardRef.current = Date.now()
-      console.log("[SR] startListening")
-    } catch (error: any) {
-      console.error("Error starting speech recognition:", error)
-      if (error.name === "NotAllowedError") {
-        addErrorMessage(
-          "Microphone access denied. Please allow microphone access in your browser settings and try again.",
-        )
-      } else {
-        addErrorMessage("Unable to start listening. Please try again or use text input.")
-      }
-      setShowTextInput(true)
-    }
-  }
-
-  // Stop speech recognition
-  const stopListening = () => {
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.stop()
-      console.log("[SR] stopListening")
-    }
-  }
-
-  // Handle speech recognition result
-  const handleSpeechResult = async (transcript: string) => {
-    console.log("handleSpeechResult called with:", transcript)
-    if (!transcript || transcript.length < 2) {
-      return // Ignore very short or empty results
-    }
-    setCurrentTranscript("")
-    try {
-      // Add user message immediately
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        type: "user",
-        content: transcript,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, userMsg])
-
-      // Get AI response
-      const aiResponse = await getAIResponse(transcript)
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        type: "ai",
-        content: aiResponse.response,
-        timestamp: new Date(),
-        photos: aiResponse.photos,
-      }
-      setMessages((prev) => [...prev, aiMsg])
-
-      // If photos are returned, show them
-      if (aiResponse.photos && aiResponse.photos.length > 0) {
-        setShowingMemoryPhotos(aiResponse.photos)
-        setCurrentMemoryIndex(0)
-      }
-
-      // Speak the response immediately
-      speakResponse(aiResponse.response)
-    } catch (error) {
-      console.error("Error processing speech:", error)
-      addErrorMessage("I'm having trouble understanding right now. Please try again.")
-    }
-  }
-
-  // Handle text input submission
-  const handleTextSubmit = async () => {
-    if (!textInput.trim()) return
-    const userMessage = textInput.trim()
-    setTextInput("")
-    try {
-      // Add user message immediately
-      const userMsg: Message = {
-        id: Date.now().toString(),
-        type: "user",
-        content: userMessage,
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, userMsg])
-
-      // Get AI response
-      const aiResponse = await getAIResponse(userMessage)
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        type: "ai",
-        content: aiResponse.response,
-        timestamp: new Date(),
-        photos: aiResponse.photos,
-      }
-      setMessages((prev) => [...prev, aiMsg])
-
-      // If photos are returned, show them
-      if (aiResponse.photos && aiResponse.photos.length > 0) {
-        setShowingMemoryPhotos(aiResponse.photos)
-        setCurrentMemoryIndex(0)
-      }
-
-      // Speak the response immediately
-      speakResponse(aiResponse.response)
-    } catch (error) {
-      console.error("Error processing text:", error)
-      addErrorMessage("I'm having trouble understanding right now. Please try again.")
-    }
-  }
-
-  // Get AI response using OpenAI API
-  const getAIResponse = async (message: string): Promise<{ response: string; photos?: MemoryPhoto[] }> => {
-    console.log("getAIResponse called with:", message)
-    try {
-      console.log("Sending message to AI:", message)
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: message,
-          conversationHistory: messages.slice(-10), // Send last 10 messages for context
-        }),
-      })
-      console.log("API response status:", response.status)
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("API error:", errorText)
-        throw new Error(`API request failed: ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("AI response received:", data.response)
-      console.log("Photos received:", data.photos?.length || 0)
-      if (!data.response) {
-        throw new Error("No response from AI")
-      }
-
-      // Force photo display for certain keywords even if AI doesn't trigger it
-      let photosToShow = data.photos
-      if (!photosToShow || photosToShow.length === 0) {
-        const messageLower = message.toLowerCase()
-        if (
-          messageLower.includes("home") ||
-          messageLower.includes("house") ||
-          (messageLower.includes("miss") && messageLower.includes("home")) ||
-          messageLower.includes("wish i could see")
-        ) {
-          // Manually fetch home photos
-          try {
-            const photoResponse = await fetch(`/api/photos?query=home house family`, {
-                credentials: 'include'
-            })
-            const photoData = await photoResponse.json()
-            photosToShow = photoData.photos || []
-            console.log("Manually fetched home photos:", photosToShow.length)
-          } catch (error) {
-            console.error("Error fetching photos manually:", error)
-          }
-        }
-      }
-
-      return {
-        response: data.response,
-        photos: photosToShow,
-      }
-    } catch (error) {
-      console.error("Error getting AI response:", error)
-      // Even in fallback, try to show relevant photos
-      const messageLower = message.toLowerCase()
-      let fallbackPhotos = undefined
-      if (messageLower.includes("home") || messageLower.includes("house")) {
-        try {
-          const photoResponse = await fetch(`/api/photos?query=home`, {
-            credentials: 'include'
-          })
-          const photoData = await photoResponse.json()
-          fallbackPhotos = photoData.photos || []
-        } catch (error) {
-          console.error("Error fetching fallback photos:", error)
-        }
-      }
-      return {
-        response: getPersonalizedFallback(message),
-        photos: fallbackPhotos,
-      }
-    }
-  }
-
-  // When returning from photo view, maintain conversation context
-  const handleContinueConversation = () => {
-    setShowingMemoryPhotos([])
-    // Don't reset conversation - keep the context flowing
-  }
-
-  // Improved fallback responses that are more personalized
-  const getPersonalizedFallback = (message: string): string => {
-    const lowerMessage = message.toLowerCase()
-    if (lowerMessage.includes("birthday") || lowerMessage.includes("celebration")) {
-      return "That sounds like such a special birthday, Sid! Tell me more about your 75th birthday celebration. Who was there with you? What made it so memorable?"
-    }
-    if (lowerMessage.includes("75th") || lowerMessage.includes("last year")) {
-      return "Your 75th birthday must have been wonderful, Sid. I'd love to hear more about that celebration. What was your favorite part of the day?"
-    }
-    if (lowerMessage.includes("home") || lowerMessage.includes("house")) {
-      return "I can hear how much your home means to you, Sid. What's your favorite memory from your home? Maybe a special room or activity you enjoyed there?"
-    }
-    if (lowerMessage.includes("hello") || lowerMessage.includes("hi")) {
-      return `Hello ${lowerMessage.includes("sid") ? "Sid" : "there"}! I'm so glad you're here. How are you feeling today?`
-    }
-    if (lowerMessage.includes("anxious") || lowerMessage.includes("anxiety")) {
-      return "I understand you're feeling anxious, Sid. That's completely normal. Let's try some deep breathing together. Breathe in slowly for 4 counts, hold for 4, then breathe out for 4. You're safe here with me."
-    }
-    if (lowerMessage.includes("sleep") || lowerMessage.includes("tired")) {
-      return "Having trouble sleeping can be really difficult, Sid. Let's try some calming techniques. Would you like to try the breathing exercise or look at some peaceful scenes? Sometimes gentle relaxation can help prepare your mind for rest."
-    }
-    if (
-      lowerMessage.includes("sad") ||
-      lowerMessage.includes("upset") ||
-      lowerMessage.includes("not good") ||
-      lowerMessage.includes("bad")
-    ) {
-      return "I hear that you're not feeling good right now, Sid. It's okay to have difficult feelings. Take a deep breath with me. You're safe, and I'm here to help you feel more peaceful."
-    }
-    if (lowerMessage.includes("mood") || lowerMessage.includes("feeling")) {
-      return "I'm here to help you with your mood, Sid. Sometimes when we're feeling overwhelmed, it helps to focus on our breathing or look at something peaceful. Would you like to try one of the calming activities?"
-    }
-    if (lowerMessage.includes("confused") || lowerMessage.includes("lost") || lowerMessage.includes("don't know")) {
-      return "It's okay to feel confused sometimes, Sid. You don't need to worry about remembering everything. Let's focus on this moment together. You're doing just fine."
-    }
-    // Default personalized response
-    return "Thank you for sharing that with me, Sid. I'm here to listen and support you. What would help you feel more comfortable right now?"
-  }
-
-  // Speak AI response with selected voice
-  const speakResponse = (text: string, onEnd?: () => void) => {
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.volume = volume[0] / 100
-    utterance.rate = 1.0 // Faster for quicker responses
-    utterance.pitch = 1.0
-    if (selectedVoice) {
-      utterance.voice = selectedVoice
-    }
-    utterance.onend = () => {
-      console.log("[TTS] onend")
-      setTimeout(() => {
-        if (voiceChatMode) startListening()
-      }, 200) // Reduced delay for faster restart
-      onEnd && onEnd()
-    }
-    speechSynthesis.speak(utterance)
-    console.log("[TTS] speak", text)
-  }
-
-  // Helper function to add error messages
-  const addErrorMessage = (content: string) => {
-    const errorMsg: Message = {
-      id: Date.now().toString(),
-      type: "ai",
-      content,
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, errorMsg])
-  }
-
-  // Handle microphone button click for voice chat mode
-  const handleMicrophoneClick = () => {
-    if (voiceChatMode) {
-      stopListening()
-      speechSynthesis.cancel()
-      setVoiceChatMode(false)
-      if (restartTimeout.current) clearTimeout(restartTimeout.current)
-    } else {
-      setVoiceChatMode(true)
-      setTimeout(() => startListening(), 300)
-    }
-  }
-
-  // Handle activity selection
-  const handleActivityClick = (activityName: string) => {
-    if (activityName === "Breathing") {
-      setCurrentActivity("breathing")
-      setIsBreathing(true)
-    } else if (activityName === "Peaceful Scene") {
-      setCurrentActivity("peaceful scene")
-      setCurrentImageIndex(0)
-    } else {
-      setCurrentActivity(activityName.toLowerCase())
-    }
-  }
-
-  // Stop breathing exercise
-  const stopBreathingExercise = () => {
-    setIsBreathing(false)
-    setCurrentActivity(null)
-  }
-
-  // Handle volume change
-  const handleVolumeChange = (newVolume: number[]) => {
-    setVolume(newVolume)
-  }
-
-  // Test selected voice
-  const testSelectedVoice = () => {
-    if (selectedVoice && window.speechSynthesis) {
-      const testText = "Hello! This is a test of the selected voice. How does it sound to you?"
-      const utterance = new SpeechSynthesisUtterance(testText)
-      utterance.voice = selectedVoice
-      utterance.volume = volume[0] / 100
-      utterance.rate = 1.0
-      utterance.pitch = 1.0
-      speechSynthesis.speak(utterance)
-    }
-  }
-
-  // Get unique languages from available voices
-  const getUniqueLanguages = () => {
-    const languages = availableVoices.map(voice => voice.lang)
-    return [...new Set(languages)].sort()
-  }
-
-  // Get filtered voices based on language filter
-  const getFilteredVoices = () => {
-    if (voiceLanguageFilter === "all") {
-      return availableVoices
-    }
-    return availableVoices.filter(voice => voice.lang === voiceLanguageFilter)
-  }
-
-  // Reset to default preferred voice
-  const resetToDefaultVoice = () => {
-    const preferredVoice = availableVoices.find(
-      (voice) =>
-        voice.name.includes("Samantha") ||
-        voice.name.includes("Karen") ||
-        voice.name.includes("Moira") ||
-        voice.name.includes("Female") ||
-        voice.lang.startsWith("en"),
-    )
-    if (preferredVoice) {
-      setSelectedVoice(preferredVoice)
-    }
-  }
-
-  // Navigate memory photos
-  const nextMemoryPhoto = () => {
-    setCurrentMemoryIndex((prev) => (prev + 1) % showingMemoryPhotos.length)
-  }
-
-  const prevMemoryPhoto = () => {
-    setCurrentMemoryIndex((prev) => (prev - 1 + showingMemoryPhotos.length) % showingMemoryPhotos.length)
-  }
-
-  // Memory Photos Display
-  if (showingMemoryPhotos.length > 0) {
-    const currentPhoto = showingMemoryPhotos[currentMemoryIndex]
+export default function CalmPathLanding() {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-400 via-purple-500 to-purple-600 text-white">
-        {/* Header */}
-        <div className="px-6 pt-8 pb-6">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Heart className="w-6 h-6 fill-white" />
-              <span className="text-xl font-semibold">CalmPath</span>
-            </div>
-            <div className="text-sm opacity-80">Memory Photos</div>
-          </div>
-        </div>
-        {/* Memory Photo Content */}
-        <div className="bg-gray-50 text-gray-900 rounded-t-3xl min-h-[calc(100vh-120px)] px-6 pt-8">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Beautiful Memories</h2>
-            <p className="text-gray-600 mb-8">Here are some wonderful photos that might bring back happy memories</p>
-            {/* Photo Display */}
-            <div className="relative mb-8 rounded-2xl overflow-hidden shadow-2xl max-w-2xl mx-auto">
-              <div className="aspect-video bg-gradient-to-br from-blue-200 to-purple-200 relative">
-                <img
-                  src={currentPhoto.url || "/placeholder.svg"}
-                  alt={currentPhoto.name}
-                  className="w-full h-full object-cover"
-                />
-                {/* Navigation arrows */}
-                {showingMemoryPhotos.length > 1 && (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800"
-                      onClick={prevMemoryPhoto}
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800"
-                      onClick={nextMemoryPhoto}
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </Button>
-                  </>
-                )}
-                {/* Photo indicators */}
-                {showingMemoryPhotos.length > 1 && (
-                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-                    {showingMemoryPhotos.map((_, index) => (
-                      <div
-                        key={index}
-                        className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentMemoryIndex ? "bg-white" : "bg-white/50"
-                          }`}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Photo Details */}
-            <div className="text-center mb-8">
-              <h3 className="text-xl font-semibold mb-2 text-gray-800">{currentPhoto.name}</h3>
-              <p className="text-gray-600 mb-4">{currentPhoto.description}</p>
-              {currentPhoto.context && (
-                <div className="bg-blue-50 rounded-lg p-4 text-left max-w-2xl mx-auto">
-                  <p className="text-gray-700 italic">"{currentPhoto.context}"</p>
-                </div>
-              )}
-            </div>
-            <div className="flex gap-4 justify-center">
-              <Button
-                onClick={handleContinueConversation}
-                variant="outline"
-                className="border-purple-500 text-purple-600 hover:bg-purple-50 bg-transparent"
-              >
-                Continue Conversation
-              </Button>
-              {showingMemoryPhotos.length > 1 && (
-                <Button onClick={nextMemoryPhoto} className="bg-purple-500 hover:bg-purple-600 text-white">
-                  Next Photo
-                </Button>
-              )}
-            </div>
-          </div>
-          {/* Bottom Actions */}
-          {/* <div className="flex items-center justify-center py-4 border-t mt-8">
-            <div className="flex items-center gap-2">
-              {volume[0] === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              <Slider value={volume} onValueChange={handleVolumeChange} max={100} step={1} className="w-20" />
-              <Volume2 className="w-4 h-4" />
-            </div>
-          </div> */}
-        </div>
-      </div>
-    )
-  }
-
-  // Breathing exercise view with realistic animation
-  if (currentActivity === "breathing") {
-    const getBreathingText = () => {
-      switch (breathingPhase) {
-        case "inhale":
-          return "Breathe in slowly..."
-        case "hold":
-          return "Hold gently..."
-        case "exhale":
-          return "Breathe out slowly..."
-        default:
-          return "Breathe naturally..."
-      }
-    }
-
-    const getBreathingScale = () => {
-      const baseScale = 1
-      const maxScale = 1.4
-      const progress = breathingProgress
-
-      if (breathingPhase === "inhale") {
-        return baseScale + (maxScale - baseScale) * progress
-      } else if (breathingPhase === "hold") {
-        return maxScale
-      } else {
-        return maxScale - (maxScale - baseScale) * (1 - progress)
-      }
-    }
-
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-400 via-blue-500 to-blue-600 text-white">
-        {/* Clean Header */}
-        <div className="px-6 pt-8 pb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Heart className="w-6 h-6 fill-white" />
-              <span className="text-xl font-semibold">CalmPath</span>
-            </div>
-            <Button onClick={stopBreathingExercise} variant="ghost" size="sm" className="text-white hover:bg-white/20">
-              Done
-            </Button>
-          </div>
-        </div>
-
-        {/* Breathing Exercise Content */}
-        <div className="bg-gray-50 text-gray-900 rounded-t-3xl min-h-[calc(100vh-120px)] px-6 pt-12">
-          {/* Quick Comfort Activities */}
-          <div className="mb-12">
-            <div className="grid grid-cols-4 gap-3">
-              {comfortActivities.map((activity, index) => (
-                <Card
-                  key={index}
-                  className={`p-3 text-center hover:shadow-md transition-all cursor-pointer ${activity.name === "Breathing" ? "border-2 border-blue-500 bg-blue-50" : ""
-                    }`}
-                  onClick={() => handleActivityClick(activity.name)}
-                >
-                  <activity.icon
-                    className={`w-6 h-6 mx-auto mb-1 ${activity.name === "Breathing" ? "text-blue-600" : "text-blue-500"
-                      }`}
-                  />
-                  <p className="text-xs font-medium">{activity.name}</p>
-                </Card>
-              ))}
-            </div>
-          </div>
-
-          {/* Enhanced Breathing Animation */}
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-light mb-12 text-gray-800">Breathe with me</h2>
-
-            <div className="relative mb-12 flex items-center justify-center h-80">
-              {/* Outer ripple rings */}
-              <div
-                className="absolute w-80 h-80 rounded-full border border-blue-200 opacity-20"
-                style={{
-                  transform: `scale(${getBreathingScale() * 0.8})`,
-                  transition: breathingPhase === "hold" ? "none" : "transform 4000ms cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-              />
-              <div
-                className="absolute w-64 h-64 rounded-full border border-blue-300 opacity-30"
-                style={{
-                  transform: `scale(${getBreathingScale() * 0.9})`,
-                  transition: breathingPhase === "hold" ? "none" : "transform 4000ms cubic-bezier(0.4, 0, 0.2, 1)",
-                }}
-              />
-
-              {/* Main breathing circle */}
-              <div
-                className="relative w-48 h-48 rounded-full shadow-2xl"
-                style={{
-                  transform: `scale(${getBreathingScale()})`,
-                  transition: breathingPhase === "hold" ? "none" : "transform 4000ms cubic-bezier(0.4, 0, 0.2, 1)",
-                  background: `radial-gradient(circle, 
-                    ${breathingPhase === "inhale" ? "rgba(59, 130, 246, 0.9)" : "rgba(59, 130, 246, 0.7)"} 0%, 
-                    ${breathingPhase === "inhale" ? "rgba(37, 99, 235, 1)" : "rgba(37, 99, 235, 0.8)"} 100%)`,
-                  boxShadow: `0 0 ${breathingPhase === "inhale" ? "60px" : "30px"} rgba(59, 130, 246, ${breathingPhase === "inhale" ? "0.4" : "0.2"})`,
-                }}
-              >
-                {/* Inner glow effect */}
-                <div
-                  className="absolute inset-4 rounded-full"
-                  style={{
-                    background: "radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%)",
-                    opacity: breathingPhase === "inhale" ? 0.8 : 0.4,
-                    transition: "opacity 2000ms ease-in-out",
-                  }}
-                />
-
-                {/* Breathing particles */}
-                {[...Array(8)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="absolute w-2 h-2 bg-white rounded-full opacity-60"
-                    style={{
-                      top: "50%",
-                      left: "50%",
-                      transform: `
-                        translate(-50%, -50%) 
-                        rotate(${i * 45}deg) 
-                        translateY(${breathingPhase === "inhale" ? "-60px" : "-40px"})
-                        scale(${breathingPhase === "inhale" ? 1.2 : 0.8})
-                      `,
-                      transition: "all 4000ms cubic-bezier(0.4, 0, 0.2, 1)",
-                      animationDelay: `${i * 100}ms`,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-2xl font-light text-gray-700 transition-all duration-1000">{getBreathingText()}</p>
-              <div className="flex justify-center items-center gap-2">
-                <div className="flex gap-1">
-                  {["inhale", "hold", "exhale"].map((phase, index) => (
-                    <div
-                      key={phase}
-                      className={`w-2 h-2 rounded-full transition-all duration-500 ${breathingPhase === phase ? "bg-blue-600 scale-125" : "bg-gray-300"
-                        }`}
-                    />
-                  ))}
-                </div>
-              </div>
-              <p className="text-gray-500 text-sm">
-                {breathingPhase === "inhale" && "4 seconds"}
-                {breathingPhase === "hold" && "2 seconds"}
-                {breathingPhase === "exhale" && "6 seconds"}
-              </p>
-            </div>
-          </div>
-
-          {/* Clean Bottom Controls */}
-          <div className="flex items-center justify-center py-6 border-t">
-            <div className="flex items-center gap-3">
-              {volume[0] === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              <Slider value={volume} onValueChange={handleVolumeChange} max={100} step={1} className="w-24" />
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Peaceful Scene view with auto-changing images
-  if (currentActivity === "peaceful scene") {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-green-400 via-green-500 to-green-600 text-white">
-        {/* Header */}
-        <div className="px-6 pt-8 pb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Heart className="w-6 h-6 fill-white" />
-              <span className="text-xl font-semibold">CalmPath</span>
-            </div>
-            <Button
-              onClick={() => setCurrentActivity(null)}
-              variant="ghost"
-              size="sm"
-              className="text-white hover:bg-white/20"
-            >
-              Done
-            </Button>
-          </div>
-        </div>
-
-        {/* Peaceful Scene Content */}
-        <div className="bg-gray-50 text-gray-900 rounded-t-3xl min-h-[calc(100vh-120px)] px-6 pt-12">
-          {/* Quick Comfort Activities */}
-          <div className="mb-12">
-            <div className="grid grid-cols-4 gap-3">
-              {comfortActivities.map((activity, index) => (
-                <Card
-                  key={index}
-                  className={`p-3 text-center hover:shadow-md transition-all cursor-pointer ${activity.name === "Peaceful Scene" ? "border-2 border-green-500 bg-green-50" : ""
-                    }`}
-                  onClick={() => handleActivityClick(activity.name)}
-                >
-                  <activity.icon
-                    className={`w-6 h-6 mx-auto mb-1 ${activity.name === "Peaceful Scene" ? "text-green-600" : "text-blue-500"
-                      }`}
-                  />
-                  <p className="text-xs font-medium">{activity.name}</p>
-                </Card>
-              ))}
-            </div>
-          </div>
-
-          {/* Peaceful Scene with Auto-changing Images */}
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-light mb-8 text-gray-800">Peaceful moments</h2>
-            <div className="relative mb-8 rounded-2xl overflow-hidden shadow-2xl">
-              <div className="aspect-video bg-gradient-to-br from-blue-200 to-green-200 relative">
-                <img
-                  src={peacefulImages[currentImageIndex] || "/placeholder.svg"}
-                  alt="Peaceful scene"
-                  className="w-full h-full object-cover transition-opacity duration-1000"
-                  style={{ opacity: 1 }}
-                />
-                {/* Image overlay with gentle gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                {/* Image indicators */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-                  {peacefulImages.map((_, index) => (
-                    <div
-                      key={index}
-                      className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentImageIndex ? "bg-white" : "bg-white/50"
-                        }`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <p className="text-lg font-light mb-2 text-gray-700">
-              Take a moment to breathe and enjoy this peaceful view
-            </p>
-            <p className="text-gray-500 text-sm">Let your mind rest and find calm in these beautiful scenes</p>
-          </div>
-
-          {/* Clean Bottom Controls */}
-          <div className="flex items-center justify-center py-6 border-t">
-            <div className="flex items-center gap-3">
-              {volume[0] === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              <Slider value={volume} onValueChange={handleVolumeChange} max={100} step={1} className="w-24" />
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-400 via-blue-500 to-blue-600 text-white">
-      {/* Clean Header */}
-      <div className="px-6 pt-8 pb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Heart className="w-6 h-6 fill-white" />
-            <span className="text-xl font-semibold">CalmPath</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link href="/auth/login">
-              <Button variant="ghost" size="sm" className="text-white hover:bg-white/20">
-                <LogIn className="w-4 h-4 mr-2" />
-                Login
-              </Button>
-            </Link>
-            <Link href="/demo">
-              <Button variant="ghost" size="sm" className="text-white hover:bg-white/20">
-                Demo
-              </Button>
-            </Link>
-          </div>
-        </div>
-        <p className="text-sm opacity-90 mb-2">Your caring voice companion</p>
-        <div className="inline-block bg-green-500 text-white px-3 py-1 rounded-full text-sm">
-          {voiceChatMode
-            ? isListening
-              ? "Listening..."
-              : "Voice chat active"
-            : isListening
-              ? "Listening..."
-              : "Ready to listen"}
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="bg-gray-50 text-gray-900 rounded-t-3xl min-h-[calc(100vh-200px)] px-6 pt-8">
-        {/* Speech Recognition Support Alert */}
-        {!speechSupported && (
-          <Alert className="mb-6 border-orange-200 bg-orange-50">
-            <Shield className="h-4 w-4" />
-            <AlertDescription>
-              <div className="space-y-2">
-                <p className="font-medium">Speech recognition not available</p>
-                <p className="text-sm">
-                  Your browser doesn't support speech recognition. You can still use text input to communicate.
-                </p>
-                <Button onClick={() => setShowTextInput(true)} size="sm" className="mt-2">
-                  Use Text Input
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Clean Volume Control */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            {volume[0] === 0 ? (
-              <VolumeX className="w-5 h-5 text-gray-600" />
-            ) : (
-              <Volume2 className="w-5 h-5 text-gray-600" />
-            )}
-            <span className="text-sm font-medium">Volume</span>
-            <span className="text-sm text-blue-600 font-medium">{volume[0]}%</span>
-          </div>
-          <Slider value={volume} onValueChange={handleVolumeChange} max={100} step={1} className="w-full" />
-        </div>
-
-        {/* Voice Settings */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <Volume2 className="w-5 h-5 text-gray-600" />
-            <span className="text-sm font-medium">Voice Selection</span>
-          </div>
-          {!speechSynthesisSupported ? (
-            <div className="text-xs text-gray-500 italic p-3 bg-gray-50 rounded">
-              Speech synthesis not supported in this browser
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Language Filter */}
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Filter by Language:</label>
-                <select
-                  value={voiceLanguageFilter}
-                  onChange={(e) => setVoiceLanguageFilter(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
-                >
-                  <option value="all">All Languages</option>
-                  {getUniqueLanguages().map((lang) => (
-                    <option key={lang} value={lang}>
-                      {lang}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Voice Selection */}
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Select Voice:</label>
-                <select
-                  value={selectedVoice?.name || ""}
-                  onChange={(e) => {
-                    const voice = getFilteredVoices().find(v => v.name === e.target.value)
-                    setSelectedVoice(voice || null)
-                  }}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="">Select a voice...</option>
-                  {getFilteredVoices().map((voice) => (
-                    <option key={voice.name} value={voice.name}>
-                      {voice.name} ({voice.lang})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedVoice && (
-                <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                  <p><strong>Current:</strong> {selectedVoice.name}</p>
-                  <p><strong>Language:</strong> {selectedVoice.lang}</p>
-                  <p><strong>Default:</strong> {selectedVoice.default ? "Yes" : "No"}</p>
-                </div>
-              )}
-              {availableVoices.length === 0 && (
-                <div className="text-xs text-gray-500 italic">
-                  Loading available voices...
-                </div>
-              )}
-              {availableVoices.length > 0 && (
-                <div className="text-xs text-gray-500">
-                  {getFilteredVoices().length} voice{getFilteredVoices().length !== 1 ? 's' : ''} available
-                  {voiceLanguageFilter !== "all" && ` (${availableVoices.length} total)`}
-                </div>
-              )}
-              {selectedVoice && (
-                <div className="flex gap-2">
-                  <Button
-                    onClick={testSelectedVoice}
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-blue-600 border-blue-200 hover:bg-blue-50"
-                  >
-                    <Volume2 className="w-4 h-4 mr-2" />
-                    Test Voice
-                  </Button>
-                  <Button
-                    onClick={resetToDefaultVoice}
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-gray-600 border-gray-200 hover:bg-gray-50"
-                  >
-                    Reset to Default
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Simplified Voice Interface */}
-        <div className="text-center mb-8">
-          <div className="relative mb-6">
-            <Button
-              size="lg"
-              className={`w-28 h-28 rounded-full ${!speechSupported
-                  ? "bg-gray-400 hover:bg-gray-500 cursor-not-allowed"
-                  : voiceChatMode
-                    ? isListening
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-green-500 hover:bg-green-600"
-                    : isListening
-                      ? "bg-red-500 hover:bg-red-600"
-                      : "bg-blue-500 hover:bg-blue-600"
-                } text-white shadow-lg transition-all relative overflow-hidden`}
-              onClick={handleMicrophoneClick}
-              disabled={!speechSupported}
-            >
-              {!speechSupported ? (
-                <Shield className="w-8 h-8 relative z-10" />
-              ) : voiceChatMode ? (
-                isListening ? (
-                  <MicOff className="w-8 h-8 relative z-10" />
-                ) : (
-                  <Mic className="w-8 h-8 relative z-10" />
-                )
-              ) : isListening ? (
-                <MicOff className="w-8 h-8 relative z-10" />
-              ) : (
-                <Mic className="w-8 h-8 relative z-10" />
-              )}
-              {(isListening || voiceChatMode) && <div className="absolute inset-0 bg-white opacity-20 animate-pulse" />}
-            </Button>
-          </div>
-          <p className="text-lg font-medium mb-2">
-            {!speechSupported
-              ? "Speech not supported - use text below"
-              : voiceChatMode
-                ? isListening
-                  ? "Listening… Speak now!"
-                  : "Voice chat session active"
-                : isListening
-                  ? "Speaking... Tap to stop and send"
-                  : "Tap to start voice chat"}
-          </p>
-          <p className="text-gray-600 text-sm">One tap to start session, one tap to stop</p>
-        </div>
-
-        {/* Real-time Speech Display */}
-        {isListening && (
-          <div className="mb-8 p-6 bg-white rounded-lg border-2 border-blue-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="font-medium text-gray-700">You're saying:</span>
-            </div>
-            <div className="min-h-[60px] p-4 bg-gray-50 rounded-lg border">
-              {currentTranscript ? (
-                <p className="text-lg text-gray-800 leading-relaxed">{currentTranscript}</p>
-              ) : (
-                <p className="text-gray-400 italic">Start speaking... I'm listening for your complete message</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Text Input Alternative */}
-        {(showTextInput || !speechSupported) && (
-          <div className="mb-8 p-4 bg-blue-50 rounded-lg border">
-            <div className="flex items-center gap-2 mb-3">
-              <Type className="w-5 h-5 text-blue-600" />
-              <span className="font-medium text-blue-800">Type your message</span>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleTextSubmit()}
-                placeholder="Type what you'd like to say..."
-                className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <Button onClick={handleTextSubmit} disabled={!textInput.trim()}>
-                Send
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Recent Conversations */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-            <span className="font-medium">Recent conversation</span>
-          </div>
-          {messages.length === 0 ? (
-            <div className="flex items-center gap-2 text-gray-500">
-              <User className="w-4 h-4" />
-              <span className="text-sm">No conversations yet</span>
-            </div>
-          ) : (
-            <ScrollArea className="h-48 w-full border rounded-lg p-4 bg-white">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex gap-3 ${message.type === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[85%] p-3 rounded-lg shadow-sm ${message.type === "user"
-                          ? "bg-blue-500 text-white rounded-br-sm"
-                          : "bg-gray-100 text-gray-800 rounded-bl-sm"
-                        }`}
-                    >
-                      <p className="font-medium text-xs mb-2 opacity-75">
-                        {message.type === "user" ? "You said:" : "CalmPath:"}
-                      </p>
-                      <p className="text-sm leading-relaxed">{message.content}</p>
-                      {message.photos && message.photos.length > 0 && (
-                        <div className="mt-2 text-xs opacity-75">
-                          📸 {message.photos.length} memory photo{message.photos.length > 1 ? "s" : ""} shared
+        <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+            {/* Header */}
+            <header className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                            <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                         </div>
-                      )}
-                      <p className="text-xs opacity-60 mt-2">
-                        {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </p>
+                        <span className="text-lg sm:text-xl font-semibold text-blue-900">CalmPath</span>
                     </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </div>
 
-        {/* Quick Comfort Activities */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-            <span className="font-medium">Quick comfort activities</span>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            {comfortActivities.map((activity, index) => (
-              <Card
-                key={index}
-                className="p-4 text-center hover:shadow-md transition-shadow cursor-pointer"
-                onClick={() => handleActivityClick(activity.name)}
-              >
-                <activity.icon className="w-8 h-8 mx-auto mb-2 text-blue-500" />
-                <p className="text-sm font-medium">{activity.name}</p>
-              </Card>
-            ))}
-          </div>
-        </div>
+                    {/* Auth Buttons */}
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <Link href="/auth/login">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-blue-700 hover:text-blue-900 hover:bg-blue-50 px-3 sm:px-4 py-2 text-sm sm:text-base"
+                            >
+                                Log in
+                            </Button>
+                        </Link>
+                        <Link href="/auth/signup">
+                            <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 text-sm sm:text-base rounded-lg shadow-sm"
+                            >
+                                Sign up
+                            </Button>
+                        </Link>
+                    </div>
+                </div>
+            </header>
 
-        {/* Clean Bottom Actions */}
-        <div className="flex items-center justify-center py-4 border-t">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowTextInput(!showTextInput)}
-            className="text-gray-600 hover:text-gray-800"
-          >
-            <Type className="w-4 h-4 mr-2" />
-            {showTextInput ? "Hide" : "Show"} Text Input
-          </Button>
-        </div>
-      </div>
+            {/* Main Content */}
+            <main className="container mx-auto px-4 sm:px-6 py-4 sm:py-8 max-w-4xl">
+                <div className="text-center mb-8 sm:mb-12">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-blue-900 mb-4 sm:mb-6 leading-tight px-2">
+                        Your Companion in Calm —<br className="hidden sm:block" />
+                        <span className="sm:hidden"> </span>24/7 Voice Support for
+                        <br className="hidden sm:block" />
+                        <span className="sm:hidden"> </span>Older Adults
+                    </h1>
+                    <p className="text-base sm:text-lg text-gray-600 mb-6 sm:mb-8 max-w-2xl mx-auto px-2">
+                        Engage your loved one in calming conversations during moments of confusion or anxiety
+                    </p>
+                </div>
 
-      {/* Notification Manager for Reminders */}
-      <NotificationManager patientId={1} />
-    </div>
-  )
+                {/* Phone Mockup Section */}
+                <div className="flex justify-center mb-10 sm:mb-16">
+                    <div className="relative">
+                        <div className="w-64 h-80 sm:w-80 sm:h-96 bg-blue-900 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-2xl">
+                            <div className="w-full h-full bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 flex flex-col items-center justify-center">
+                                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
+                                    <div className="w-9 h-9 sm:w-12 sm:h-12 bg-blue-200 rounded-full flex items-center justify-center">
+                                        <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-400 rounded-full"></div>
+                                    </div>
+                                </div>
+                                <div className="bg-blue-50 rounded-xl sm:rounded-2xl p-3 sm:p-4 max-w-40 sm:max-w-48">
+                                    <p className="text-blue-900 font-medium text-center text-sm sm:text-base">
+                                        Hello! I'm here
+                                        <br />
+                                        to talk with you.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Features Section */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-8 sm:mb-12">
+                    <Card className="p-4 sm:p-6 border-0 shadow-sm bg-white">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Mic className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900 mb-1 sm:mb-2 text-sm sm:text-base">
+                                    Gentle voice assistant that talks with the user
+                                </h3>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card className="p-4 sm:p-6 border-0 shadow-sm bg-white">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900 mb-1 sm:mb-2 text-sm sm:text-base">
+                                    Medication reminders with caregiver notifications
+                                </h3>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card className="p-4 sm:p-6 border-0 shadow-sm bg-white sm:col-span-2 lg:col-span-1">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Camera className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-gray-900 mb-1 sm:mb-2 text-sm sm:text-base">
+                                    Upload personal photos for reminiscence therapy
+                                </h3>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+
+                {/* CTA Section */}
+                <div className="text-center mb-6 sm:mb-8 px-4">
+                    <Button
+                        size="lg"
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-3 sm:py-4 text-base sm:text-lg rounded-xl shadow-lg w-full sm:w-auto min-h-[48px]"
+                    >
+                        <span className="block sm:hidden">
+                            Start 14-day free trial
+                            <br />
+                            $29/month, cancel anytime
+                        </span>
+                        <span className="hidden sm:block">Start 14-day free trial • $29/month, cancel anytime</span>
+                    </Button>
+                </div>
+
+                {/* Disclaimer */}
+                <div className="text-center text-xs sm:text-sm text-gray-500 mb-6 sm:mb-8 px-4">
+                    This product is not intended to diagnose, treat, cure, or prevent disease.
+                </div>
+
+                {/* Footer */}
+                <footer className="flex flex-col sm:flex-row justify-between items-center pt-6 sm:pt-8 border-t border-gray-200 text-xs sm:text-sm text-gray-600 gap-4 sm:gap-0">
+                    <div>CalmPath, LLC</div>
+                    <div className="flex gap-4 sm:gap-6">
+                        <a href="#" className="hover:text-blue-600 transition-colors touch-target">
+                            Contact us
+                        </a>
+                        <a href="#" className="hover:text-blue-600 transition-colors touch-target">
+                            FAQ
+                        </a>
+                    </div>
+                </footer>
+            </main>
+        </div>
+    )
 }

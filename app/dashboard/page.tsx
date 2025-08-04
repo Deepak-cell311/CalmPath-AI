@@ -84,6 +84,7 @@ export default function FacilityDashboard() {
     fetchDashboardData();
     setLastUpdated("Just now");
     // Optionally, re-fetch data here
+    window.location.reload();
   };
 
   return (

@@ -2,24 +2,40 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
 
 export interface Patient {
   id: string
-  name: string
   firstName: string
   lastName: string
   email: string
-  phone: string
-  date_added: string
-  status: 'Active' | 'Invited' | 'Inactive'
-  last_activity: string
-  facility_id?: string
-  message?: string
+  phone?: string
+  age?: number
+  status: 'Active' | 'Invited' | 'Inactive' | 'ok'
+  care_level?: 'low' | 'medium' | 'high'
+  roomNumber?: string
+  medicalNotes?: string
+  lastInteraction?: string
+  profileImageUrl?: string
+  admissionDate?: string
+  emergencyContact?: string
+  emergencyPhone?: string
+  isActive?: boolean
+  userId?: string
+  facilityId?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface CreatePatientRequest {
-  name: string
+  firstName: string
+  lastName: string
   email: string
   phone?: string
-  message?: string
+  age?: number
+  care_level?: 'low' | 'medium' | 'high'
+  roomNumber?: string
+  medicalNotes?: string
+  emergencyContact?: string
+  emergencyPhone?: string
   facility_id?: string
+  message?: string
 }
 
 export interface PatientStats {

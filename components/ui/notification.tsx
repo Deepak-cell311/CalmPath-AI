@@ -61,7 +61,7 @@ export function NotificationManager({ patientId }: NotificationManagerProps) {
   }, [patientId]);
 
   return (
-    <div className="fixed top-4 right-4 z-50">
+    <div className="sticky top-4 right-4 z-50">
       <div className="relative">
         <button
           className="relative focus:outline-none bg-white rounded-full p-2 shadow-lg border"
@@ -81,7 +81,7 @@ export function NotificationManager({ patientId }: NotificationManagerProps) {
         {showNotifications && (
           <div className="absolute right-0 mt-2 w-80 bg-white border rounded-lg shadow-lg z-50">
             <div className="flex items-center justify-between px-4 py-2 border-b">
-              <span className="font-semibold">Notifications</span>
+              <span className="font-semibold text-gray-600">Notifications</span>
               <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600">
                 <span className="sr-only">Close</span>
                 &#10005;

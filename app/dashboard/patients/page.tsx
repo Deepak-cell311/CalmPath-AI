@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Users, Plus, Mail, Phone, Calendar, Edit, Trash2, Loader2 } from "lucide-react"
+import { Users, Plus, Mail, Phone, Calendar, Edit, Trash2, Loader2, PhoneCall } from "lucide-react"
 import { usePatients } from "@/hooks/usePatients"
 import { toast } from "sonner"
 
@@ -28,9 +28,16 @@ export default function PatientManagement() {
   const [isLoading, setIsLoading] = useState(false)
   const [patients, setPatients] = useState<any[]>([]);
   const [inviteForm, setInviteForm] = useState({
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     phone: "",
+    age: "",
+    care_level: "low" as 'low' | 'medium' | 'high',
+    roomNumber: "",
+    medicalNotes: "",
+    emergencyContact: "",
+    emergencyPhone: "",
     message: "",
   })
 
@@ -51,15 +58,34 @@ export default function PatientManagement() {
 
     try {
       const success = await createPatient({
-        name: inviteForm.name,
+        firstName: inviteForm.firstName,
+        lastName: inviteForm.lastName,
         email: inviteForm.email,
         phone: inviteForm.phone || undefined,
+        age: inviteForm.age ? parseInt(inviteForm.age) : undefined,
+        care_level: inviteForm.care_level,
+        roomNumber: inviteForm.roomNumber || undefined,
+        medicalNotes: inviteForm.medicalNotes || undefined,
+        emergencyContact: inviteForm.emergencyContact || undefined,
+        emergencyPhone: inviteForm.emergencyPhone || undefined,
         message: inviteForm.message || undefined,
       })
 
       if (success) {
         toast.success("Patient invitation sent successfully!")
-        setInviteForm({ name: "", email: "", phone: "", message: "" })
+        setInviteForm({ 
+          firstName: "", 
+          lastName: "", 
+          email: "", 
+          phone: "", 
+          age: "", 
+          care_level: "low", 
+          roomNumber: "", 
+          medicalNotes: "", 
+          emergencyContact: "", 
+          emergencyPhone: "", 
+          message: "" 
+        })
         setIsInviteDialogOpen(false);
         await fetchPatients();
       } else {
@@ -144,23 +170,35 @@ export default function PatientManagement() {
                 Invite Patient
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
                 <DialogTitle>Invite New Patient</DialogTitle>
                 <DialogDescription>
                   Send an invitation to a patient to join CalmPath through your facility.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleInvitePatient} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Patient Name</Label>
-                  <Input
-                    id="name"
-                    value={inviteForm.name}
-                    onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
-                    placeholder="Enter patient's full name"
-                    required
-                  />
+              <form onSubmit={handleInvitePatient} className="space-y-4 h-[500px] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name</Label>
+                    <Input
+                      id="firstName"
+                      value={inviteForm.firstName}
+                      onChange={(e) => setInviteForm({ ...inviteForm, firstName: e.target.value })}
+                      placeholder="John"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name</Label>
+                    <Input
+                      id="lastName"
+                      value={inviteForm.lastName}
+                      onChange={(e) => setInviteForm({ ...inviteForm, lastName: e.target.value })}
+                      placeholder="Doe"
+                      required
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email Address</Label>
@@ -173,14 +211,83 @@ export default function PatientManagement() {
                     required
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={inviteForm.phone}
+                      onChange={(e) => setInviteForm({ ...inviteForm, phone: e.target.value })}
+                      placeholder="(555) 123-4567"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="age">Age</Label>
+                    <Input
+                      id="age"
+                      type="number"
+                      value={inviteForm.age}
+                      onChange={(e) => setInviteForm({ ...inviteForm, age: e.target.value })}
+                      placeholder="65"
+                      min="0"
+                      max="120"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="roomNumber">Room Number</Label>
+                    <Input
+                      id="roomNumber"
+                      value={inviteForm.roomNumber}
+                      onChange={(e) => setInviteForm({ ...inviteForm, roomNumber: e.target.value })}
+                      placeholder="101"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="care_level">Care Level</Label>
+                    <select
+                      id="care_level"
+                      value={inviteForm.care_level}
+                      onChange={(e) => setInviteForm({ ...inviteForm, care_level: e.target.value as 'low' | 'medium' | 'high' })}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="emergencyContact">Emergency Contact</Label>
+                    <Input
+                      id="emergencyContact"
+                      value={inviteForm.emergencyContact}
+                      onChange={(e) => setInviteForm({ ...inviteForm, emergencyContact: e.target.value })}
+                      placeholder="Emergency contact name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="emergencyPhone">Emergency Phone</Label>
+                    <Input
+                      id="emergencyPhone"
+                      type="tel"
+                      value={inviteForm.emergencyPhone}
+                      onChange={(e) => setInviteForm({ ...inviteForm, emergencyPhone: e.target.value })}
+                      placeholder="(555) 987-6543"
+                    />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={inviteForm.phone}
-                    onChange={(e) => setInviteForm({ ...inviteForm, phone: e.target.value })}
-                    placeholder="(555) 123-4567"
+                  <Label htmlFor="medicalNotes">Medical Notes</Label>
+                  <Textarea
+                    id="medicalNotes"
+                    value={inviteForm.medicalNotes}
+                    onChange={(e) => setInviteForm({ ...inviteForm, medicalNotes: e.target.value })}
+                    placeholder="Any relevant medical information..."
+                    rows={3}
                   />
                 </div>
                 <div className="space-y-2">
@@ -310,6 +417,8 @@ export default function PatientManagement() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Contact</TableHead>
+                    <TableHead>Age/Room</TableHead>
+                    <TableHead>Care Level</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Date Added</TableHead>
                     <TableHead>Last Activity</TableHead>
@@ -325,16 +434,35 @@ export default function PatientManagement() {
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-sm">
-                            <Mail className="w-3 h-3" />
-                            {patient.email || 'N/A'}
+                            <PhoneCall className="w-3 h-3" />
+                            {patient.emergencyPhone || 'N/A'}
                           </div>
                           {patient.phone && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <Phone className="w-3 h-3" />
-                              {patient.phone}
+                              {patient.emergencyPhone}
                             </div>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {patient.age ? `${patient.age} years` : 'N/A'}
+                          {patient.roomNumber && (
+                            <div className="text-xs text-gray-500">
+                              Room {patient.roomNumber}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          patient.care_level === 'high' ? 'bg-red-100 text-red-800' :
+                          patient.care_level === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {patient.care_level || 'low'}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <span
@@ -347,9 +475,9 @@ export default function PatientManagement() {
                       <TableCell>{patient.lastInteraction ? new Date(patient.lastInteraction).toLocaleDateString() : 'N/A'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Button variant="ghost" size="sm">
+                          {/* <Button variant="ghost" size="sm">
                             <Edit className="w-4 h-4" />
-                          </Button>
+                          </Button> */}
                           <Button
                             variant="ghost"
                             size="sm"

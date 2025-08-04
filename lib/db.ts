@@ -7,23 +7,48 @@ const pool = new Pool({
 
 export interface Patient {
   id: string
-  name: string
+  firstName: string
+  lastName: string
   email: string
-  phone: string
-  date_added: string
-  status: 'Active' | 'Invited' | 'Inactive'
-  last_activity: string
-  facility_id?: string
-  message?: string
+  phone?: string
+  age?: number
+  status: 'Active' | 'Invited' | 'Inactive' | 'ok'
+  care_level?: 'low' | 'medium' | 'high'
+  roomNumber?: string
+  medicalNotes?: string
+  lastInteraction?: string
+  profileImageUrl?: string
+  admissionDate?: string
+  emergencyContact?: string
+  emergencyPhone?: string
+  isActive?: boolean
+  userId?: string
+  facilityId?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
-export async function createPatient(patient: Omit<Patient, 'id' | 'date_added' | 'last_activity'>): Promise<Patient> {
+export async function createPatient(patient: Omit<Patient, 'id' | 'lastInteraction' | 'admissionDate' | 'createdAt' | 'updatedAt'>): Promise<Patient> {
   const query = `
-    INSERT INTO patients (name, email, phone, status, facility_id, message)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO patients (first_name, last_name, email, phone, age, status, care_level, room_number, medical_notes, emergency_contact, emergency_phone, facility_id, is_active)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING *
   `
-  const values = [patient.name, patient.email, patient.phone, patient.status, patient.facility_id, patient.message]
+  const values = [
+    patient.firstName, 
+    patient.lastName, 
+    patient.email, 
+    patient.phone, 
+    patient.age, 
+    patient.status || 'Invited', 
+    patient.care_level || 'low', 
+    patient.roomNumber, 
+    patient.medicalNotes, 
+    patient.emergencyContact, 
+    patient.emergencyPhone, 
+    patient.facilityId, 
+    patient.isActive !== false
+  ]
   
   const result = await pool.query(query, values)
   return result.rows[0]
@@ -38,21 +63,64 @@ export async function getPatients(facilityId?: string): Promise<Patient[]> {
     values = [facilityId]
   }
   
-  query += ' ORDER BY date_added DESC'
+  query += ' ORDER BY created_at DESC'
   
   const result = await pool.query(query, values)
-  return result.rows
+  return result.rows.map(row => ({
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    age: row.age,
+    status: row.status,
+    care_level: row.care_level,
+    roomNumber: row.room_number,
+    medicalNotes: row.medical_notes,
+    lastInteraction: row.last_interaction,
+    profileImageUrl: row.profile_image_url,
+    admissionDate: row.admission_date,
+    emergencyContact: row.emergency_contact,
+    emergencyPhone: row.emergency_phone,
+    isActive: row.is_active,
+    userId: row.user_id,
+    facilityId: row.facility_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }))
 }
 
 export async function updatePatientStatus(id: string, status: Patient['status']): Promise<Patient> {
   const query = `
     UPDATE patients 
-    SET status = $1, last_activity = NOW()
+    SET status = $1, last_interaction = NOW()
     WHERE id = $2
     RETURNING *
   `
   const result = await pool.query(query, [status, id])
-  return result.rows[0]
+  const row = result.rows[0]
+  return {
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    age: row.age,
+    status: row.status,
+    care_level: row.care_level,
+    roomNumber: row.room_number,
+    medicalNotes: row.medical_notes,
+    lastInteraction: row.last_interaction,
+    profileImageUrl: row.profile_image_url,
+    admissionDate: row.admission_date,
+    emergencyContact: row.emergency_contact,
+    emergencyPhone: row.emergency_phone,
+    isActive: row.is_active,
+    userId: row.user_id,
+    facilityId: row.facility_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
 }
 
 export async function deletePatient(id: string): Promise<void> {
@@ -63,7 +131,31 @@ export async function deletePatient(id: string): Promise<void> {
 export async function getPatientById(id: string): Promise<Patient | null> {
   const query = 'SELECT * FROM patients WHERE id = $1'
   const result = await pool.query(query, [id])
-  return result.rows[0] || null
+  const row = result.rows[0]
+  if (!row) return null
+  
+  return {
+    id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    age: row.age,
+    status: row.status,
+    care_level: row.care_level,
+    roomNumber: row.room_number,
+    medicalNotes: row.medical_notes,
+    lastInteraction: row.last_interaction,
+    profileImageUrl: row.profile_image_url,
+    admissionDate: row.admission_date,
+    emergencyContact: row.emergency_contact,
+    emergencyPhone: row.emergency_phone,
+    isActive: row.is_active,
+    userId: row.user_id,
+    facilityId: row.facility_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
 }
 
 export async function getPatientStats(facilityId?: string) {
