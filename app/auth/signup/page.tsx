@@ -123,7 +123,6 @@ export default function SignupPage() {
                     <SelectValue placeholder="Select your account type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Patient">Patient</SelectItem>
                     <SelectItem value="Family Member">Family Member</SelectItem>
                     <SelectItem value="Facility Staff">Facility Staff</SelectItem>
                   </SelectContent>

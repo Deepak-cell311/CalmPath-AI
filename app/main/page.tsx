@@ -1016,12 +1016,12 @@ export default function PatientInterface() {
           <div className="flex flex-row-reverse items-center gap-3">
             <NotificationManager patientId={1} />
 
-            <Link href="/auth/login">
+            {/* <Link href="/auth/login">
               <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 flex items-center">
                 <LogIn className="w-4 h-4" />
                 Login
               </Button>
-            </Link>
+            </Link> */}
           </div>
         </div>
         <p className="text-sm opacity-90 mb-2">Your caring voice companion</p>

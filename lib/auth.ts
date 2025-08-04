@@ -74,7 +74,7 @@ class AuthClient {
   }
 
   // Authentication methods
-  async login(email: string, password: string, accountType: string, inviteCode?: string): Promise<LoginResponse> {
+  async login(email: string, password: string, accountType: "Patient" | "Family Member" | "Facility Staff", inviteCode?: string): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>('/api/auth/login-token', {
       method: 'POST',
       body: JSON.stringify({
@@ -90,7 +90,7 @@ class AuthClient {
     return data
   }
 
-  async inviteLogin(email: string, inviteCode: string, accountType: string): Promise<LoginResponse> {
+  async inviteLogin(email: string, inviteCode: string, accountType: "Patient" | "Family Member" | "Facility Staff"): Promise<LoginResponse> {
     const data = await this.request<LoginResponse>('/api/auth/invite-login', {
       method: 'POST',
       body: JSON.stringify({

@@ -6,8 +6,8 @@ interface AuthContextType {
   user: User | null
   isLoading: boolean
   isAuthenticated: boolean
-  login: (email: string, password: string, accountType: string, inviteCode?: string) => Promise<void>
-  inviteLogin: (email: string, inviteCode: string, accountType: string) => Promise<void>
+  login: (email: string, password: string, accountType: "Patient" | "Family Member" | "Facility Staff", inviteCode?: string) => Promise<void>
+  inviteLogin: (email: string, inviteCode: string, accountType: "Patient" | "Family Member" | "Facility Staff") => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
 }

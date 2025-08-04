@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Heart, ArrowLeft, Gift, Mail } from "lucide-react"
+import { Heart, ArrowLeft, Gift, Mail, Users, User, Shield, MessageCircle } from "lucide-react"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/hooks/useAuth"
@@ -16,7 +16,7 @@ import { useAuth } from "@/hooks/useAuth"
 export default function LoginPage() {
   const router = useRouter() // Initialize useRouter
   const { login, inviteLogin } = useAuth()
-  
+
   // Regular login state
   const [userType, setUserType] = useState<"Patient" | "Family Member" | "Facility Staff" | "">("")
   const [email, setEmail] = useState("")
@@ -32,6 +32,10 @@ export default function LoginPage() {
   const [isInviteLoading, setIsInviteLoading] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
 
+  // Family member login options state
+  const [showFamilyOptions, setShowFamilyOptions] = useState(false)
+  const [familyLoginData, setFamilyLoginData] = useState<{ email: string, password: string, inviteCode?: string } | null>(null)
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -39,13 +43,17 @@ export default function LoginPage() {
 
     try {
       await login(email, password, userType, inviteCode.trim() || undefined)
-      
+
+      // If family member logs in, show options
+      if (userType === "Family Member") {
+        setFamilyLoginData({ email, password, inviteCode: inviteCode.trim() || undefined })
+        setShowFamilyOptions(true)
+        setIsLoading(false)
+        return
+      }
+
       // Navigate based on account type
-      if (userType === "Patient") {
-        router.push("/family-dashboard")
-      } else if (userType === "Family Member") {
-        router.push("/family-dashboard")
-      } else if (userType === "Facility Staff") {
+      if (userType === "Facility Staff") {
         router.push("/dashboard")
       }
     } catch (err: any) {
@@ -56,6 +64,32 @@ export default function LoginPage() {
     }
   }
 
+  const handleFamilyMemberLogin = async (loginAs: "family" | "patient") => {
+    if (!familyLoginData) return
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      if (loginAs === "family") {
+        // Login as family member - go to family dashboard
+        await login(familyLoginData.email, familyLoginData.password, "Family Member", familyLoginData.inviteCode)
+        router.push("/family-dashboard")
+      } else {
+        // Login as patient - go to main page
+        await login(familyLoginData.email, familyLoginData.password, "Patient", familyLoginData.inviteCode)
+        router.push("/main")
+      }
+    } catch (err: any) {
+      console.error("Login error:", err)
+      setError(err.message || "Login failed. Please try again.")
+    } finally {
+      setIsLoading(false)
+      setShowFamilyOptions(false)
+      setFamilyLoginData(null)
+    }
+  }
+
   const handleInviteLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsInviteLoading(true)
@@ -63,13 +97,17 @@ export default function LoginPage() {
 
     try {
       await inviteLogin(inviteEmail, inviteCodeOnly.trim(), inviteUserType)
-      
+
+      // If family member logs in via invite, show options
+      if (inviteUserType === "Family Member") {
+        setFamilyLoginData({ email: inviteEmail, password: "", inviteCode: inviteCodeOnly.trim() })
+        setShowFamilyOptions(true)
+        setIsInviteLoading(false)
+        return
+      }
+
       // Navigate based on account type
-      if (inviteUserType === "Patient") {
-        router.push("/family-dashboard")
-      } else if (inviteUserType === "Family Member") {
-        router.push("/family-dashboard")
-      } else if (inviteUserType === "Facility Staff") {
+      if (inviteUserType === "Facility Staff") {
         router.push("/dashboard")
       }
     } catch (err: any) {
@@ -79,6 +117,99 @@ export default function LoginPage() {
       setIsInviteLoading(false)
     }
   }
+
+  // Family member login options view
+  if (showFamilyOptions) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <Link href="/" className="inline-flex items-center text-blue-600 hover:text-blue-800 mb-4">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Home
+            </Link>
+            <div className="flex items-center justify-center mb-4">
+              <Heart className="w-8 h-8 text-red-500 mr-2" />
+              <h1 className="text-2xl font-bold text-gray-900">CalmPath AI</h1>
+            </div>
+            <p className="text-slate-600 text-lg">Choose your access mode</p>
+            <p className="text-slate-500 text-sm mt-1">Select how you'd like to use the platform today</p>
+          </div>
+          <div className="space-y-4 mb-6">
+             {/* Family Member Access */}
+            <Card className="border-2 border-transparent hover:border-blue-200 transition-all duration-200 hover:shadow-lg group cursor-pointer">
+              <CardContent className="p-6">
+                <Button
+                  onClick={() => handleFamilyMemberLogin("family")}
+                  className="w-full h-auto p-0 bg-transparent hover:bg-transparent text-left group-hover:scale-[1.02] transition-transform"
+                  disabled={isLoading}
+                  variant="ghost"
+                >
+                  <div className="flex items-start space-x-4 w-full">
+                    <div className="bg-blue-100 rounded-xl p-3 group-hover:bg-blue-200 transition-colors">
+                      <Users className="w-6 h-6 text-blue-600" />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h3 className="text-lg font-semibold text-slate-900 mb-1">Family Member</h3>
+                      <p className="text-slate-600 text-sm mb-2">Comprehensive care management</p>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-xs font-medium">
+                          Photo Management
+                        </span>
+                        <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-xs font-medium">
+                          Medications
+                        </span>
+                        <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-md text-xs font-medium">
+                          Care Coordination
+                        </span>
+                      </div>
+                    </div>
+                    <Shield className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                  </div>
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Patient Access */}
+          <Card className="border-2 border-transparent hover:border-emerald-200 transition-all duration-200 hover:shadow-lg group cursor-pointer">
+            <CardContent className="p-6">
+              <Button
+                onClick={() => handleFamilyMemberLogin("main")}
+                className="w-full h-auto p-0 bg-transparent hover:bg-transparent text-left group-hover:scale-[1.02] transition-transform"
+                disabled={isLoading}
+                variant="ghost"
+              >
+                <div className="flex items-start space-x-4 w-full">
+                  <div className="bg-emerald-100 rounded-xl p-3 group-hover:bg-emerald-200 transition-colors">
+                    <User className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <h3 className="text-lg font-semibold text-slate-900 mb-1">Patient</h3>
+                    <p className="text-slate-600 text-sm mb-2">Personal AI companion experience</p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md text-xs font-medium">
+                        Voice Chat
+                      </span>
+                      <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md text-xs font-medium">
+                        AI Companion
+                      </span>
+                      <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md text-xs font-medium">
+                        Personal Support
+                      </span>
+                    </div>
+                  </div>
+                  <MessageCircle className="w-5 h-5 text-slate-400 group-hover:text-emerald-500 transition-colors" />
+                </div>
+              </Button>
+            </CardContent>
+          </Card>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -116,7 +247,6 @@ export default function LoginPage() {
                         <SelectValue placeholder="Select your account type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Patient">Patient</SelectItem>
                         <SelectItem value="Family Member">Family Member</SelectItem>
                         <SelectItem value="Facility Staff">Facility Staff</SelectItem>
                       </SelectContent>
@@ -201,7 +331,6 @@ export default function LoginPage() {
                         <SelectValue placeholder="Select your account type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Patient">Patient</SelectItem>
                         <SelectItem value="Family Member">Family Member</SelectItem>
                         <SelectItem value="Facility Staff">Facility Staff</SelectItem>
                       </SelectContent>
