@@ -192,7 +192,7 @@ export default function SignupPage() {
                     required
                   />
                 </div>
-                <div className="space-y-2">
+                {/* <div className="space-y-2">
                   <Label htmlFor="facilityName">Facility Id</Label>
                   <Input
                     id="facilityId"
@@ -201,7 +201,8 @@ export default function SignupPage() {
                     onChange={(e) => handleInputChange("facilityId", e.target.value)}
                     required
                   />
-                </div> </>
+                </div>  */}
+                </>
               )}
 
               {userType === "Family Member" && (
@@ -224,7 +225,7 @@ export default function SignupPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
+                  {/* <div className="space-y-2">
                     <Label htmlFor="patientCode">Patient Access Code</Label>
                     <Input
                       id="patientCode"
@@ -234,7 +235,7 @@ export default function SignupPage() {
                       onChange={(e) => handleInputChange("patientCode", e.target.value)}
                       required
                     />
-                  </div>
+                  </div> */}
                 </>
               )}
 
