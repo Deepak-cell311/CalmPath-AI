@@ -202,7 +202,7 @@ export default function FamilyDashboard() {
         try {
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/medications`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("authToken")}` },
                 // credentials: "include",
                 body: JSON.stringify(newMedication),
             });
@@ -380,7 +380,7 @@ export default function FamilyDashboard() {
 
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/reminders`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("authToken")}` },
                 body: JSON.stringify(requestBody),
             });
 
@@ -455,7 +455,7 @@ export default function FamilyDashboard() {
             // Create checkout session
             const res = await fetch(`${apiUrl}/api/billing/checkout-session`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("authToken")}` },
                 body: JSON.stringify({
                     priceId: priceId,
                     customerEmail: "user@example.com", // Replace with actual user email
@@ -463,7 +463,8 @@ export default function FamilyDashboard() {
                         facilityId: "1", // Replace with actual facility ID
                     },
                     couponId: discountAmount ? facilityStripePriceId : undefined, // Apply coupon if discount available
-                })
+                    credentials: "include"
+                }),
             });
 
             if (!res.ok) {
@@ -514,8 +515,9 @@ export default function FamilyDashboard() {
             // If not facility promo code, validate with Stripe
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/billing/validate-coupon`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("authToken")}` },
                 body: JSON.stringify({ code: userPromoCode.trim() }),
+                credentials: "include"
             });
 
             const data = await res.json();

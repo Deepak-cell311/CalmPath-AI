@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 export interface Patient {
   id: string
@@ -35,6 +35,7 @@ export interface CreatePatientRequest {
   emergencyContact?: string
   emergencyPhone?: string
   facility_id?: string
+  userId?: string
   message?: string
 }
 

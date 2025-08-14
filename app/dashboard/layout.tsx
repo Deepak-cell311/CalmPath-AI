@@ -40,7 +40,7 @@ function AppSidebar() {
     router.push("/auth/login")
   }
 
-  console.log("User data: ", user)
+  // console.log("User data: ", user)
 
   return (
     <Sidebar>

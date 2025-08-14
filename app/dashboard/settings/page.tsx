@@ -10,8 +10,11 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { CreditCard, DollarSign, Download, Bell, Building, Users, Gift } from "lucide-react"
+import { useAuth } from "@/hooks/useAuth"
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+  console.log("user:", user);
   const [facilityInfo, setFacilityInfo] = useState({
     id: "", // Add id field
     name: "",
@@ -24,6 +27,8 @@ export default function SettingsPage() {
     logoPreview: null as string | null,
     brandColor: "#3B82F6",
   })
+
+  console.log("facilityInfo:", facilityInfo);
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
     smsAlerts: false,
@@ -32,6 +37,7 @@ export default function SettingsPage() {
   })
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [logoError, setLogoError] = useState<string | null>(null)
   const [facilityBilling, setFacilityBilling] = useState({
     monthlyPrice: "",      // e.g. "25"
     promoCode: "",         // e.g. "FREE2025"
@@ -46,6 +52,7 @@ export default function SettingsPage() {
   const [isLoadingInvites, setIsLoadingInvites] = useState(false);
   const [inviteStatus, setInviteStatus] = useState("");
 
+  // Load initial data and check for Stripe status
   useEffect(() => {
     // Check for success/cancel from Stripe checkout
     const urlParams = new URLSearchParams(window.location.search);
@@ -56,7 +63,9 @@ export default function SettingsPage() {
       setInviteStatus("Payment successful! Your invites will be available shortly.");
       // Reload invite data after successful payment
       setTimeout(() => {
-        loadInviteData();
+        if (facilityInfo.id) {
+          loadInviteData();
+        }
         setInviteStatus("");
       }, 3000);
     } else if (canceled) {
@@ -64,13 +73,14 @@ export default function SettingsPage() {
       setTimeout(() => setInviteStatus(""), 3000);
     }
 
+    // Load facility info
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
       // credentials: "include"
     })
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         setFacilityInfo({
-          id: data.id || "", // Store id from backend
+          id: data.id || "",
           name: data.name || "",
           address: data.address || "",
           phone: data.phone || "",
@@ -80,9 +90,11 @@ export default function SettingsPage() {
           logoFile: null,
           logoPreview: null,
           brandColor: data.brandColor || "#3B82F6",
-        })
+        });
       })
-      .catch(() => setSaveStatus("Failed to load facility info"));
+      .catch((error) => {
+        console.error("Error loading facility info:", error);
+      });
 
     // Load billing settings
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
@@ -94,61 +106,106 @@ export default function SettingsPage() {
           monthlyPrice: data.monthlyPrice || "",
           promoCode: data.promoCode || "",
           stripePriceId: data.stripePriceId || "",
-        })
+        });
       })
       .catch(() => setBillingSaveStatus("Failed to load billing settings"));
+  }, []);
 
-    // Load invite system data
-    loadInviteData();
-  }, [])
+  // Load invite data when facility ID is available
+  useEffect(() => {
+    if (facilityInfo?.id) {
+      loadInviteData();
+    }
+  }, [facilityInfo?.id]);
 
   const loadInviteData = async () => {
     setIsLoadingInvites(true);
     try {
+      const facilityId = facilityInfo.id;
+      
+      if (!facilityId) {
+        console.error("No facility ID available");
+        setInvitePackages([]);
+        setInvitePurchases([]);
+        setAvailableInvites([]);
+        return;
+      }
+
       // Load invite packages
-      const packagesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-packages`, {
-        credentials: 'include'
-      });
-      const packagesData = await packagesRes.json();
-      setInvitePackages(packagesData);
+      const packagesRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-packages?facilityId=${encodeURIComponent(facilityId)}`,
+        { credentials: 'include' }
+      );
+      
+      if (packagesRes.ok) {
+        const packagesData = await packagesRes.json();
+        setInvitePackages(Array.isArray(packagesData) ? packagesData : []);
+      } else {
+        console.error("Failed to load invite packages:", packagesRes.status, await packagesRes.text());
+        setInvitePackages([]);
+      }
 
       // Load invite purchases
-      const purchasesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-purchases`, {
-        credentials: 'include'
-      });
-      const purchasesData = await purchasesRes.json();
-      setInvitePurchases(purchasesData);
+      const purchasesRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-purchases?facilityId=${encodeURIComponent(facilityId)}`,
+        { credentials: 'include' }
+      );
+      
+      if (purchasesRes.ok) {
+        const purchasesData = await purchasesRes.json();
+        setInvitePurchases(Array.isArray(purchasesData) ? purchasesData : []);
+      } else {
+        console.error("Failed to load invite purchases:", purchasesRes.status, await purchasesRes.text());
+        setInvitePurchases([]);
+      }
 
       // Load available invites
-      const invitesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/available-invites`, {
-        credentials: 'include'
-      });
-      const invitesData = await invitesRes.json();
-      setAvailableInvites(invitesData);
+      const invitesRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/available-invites?facilityId=${encodeURIComponent(facilityId)}`,
+        { credentials: 'include' }
+      );
+      
+      if (invitesRes.ok) {
+        const invitesData = await invitesRes.json();
+        setAvailableInvites(Array.isArray(invitesData) ? invitesData : []);
+      } else {
+        console.error("Failed to load available invites:", invitesRes.status, await invitesRes.text());
+        setAvailableInvites([]);
+      }
     } catch (error) {
       console.error("Error loading invite data:", error);
       setInviteStatus("Failed to load invite data");
+      // Ensure arrays are set to empty arrays on error
+      setInvitePackages([]);
+      setInvitePurchases([]);
+      setAvailableInvites([]);
     } finally {
       setIsLoadingInvites(false);
     }
   };
 
   const handleSave = async () => {
-    console.log("handleSave called");
-    console.log("facilityInfo:", facilityInfo);
-    setSaveStatus(null)
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      // credentials: "include",
-      body: JSON.stringify(facilityInfo), // Send id as well
-    })
-    if (res.ok) {
-      setSaveStatus("Saved!")
-    } else {
-      setSaveStatus("Failed to save")
+    setIsLoading(true);
+    setSaveStatus(null);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // credentials: "include",
+        body: JSON.stringify(facilityInfo), // Send id as well
+      });
+      if (res.ok) {
+        setSaveStatus("Saved!");
+      } else {
+        setSaveStatus("Failed to save");
+      }
+    } catch (error) {
+      setSaveStatus("Failed to save");
+    } finally {
+      setIsLoading(false);
     }
   }
+
 
   const handleSaveBilling = async () => {
     setBillingSaveStatus("");
@@ -177,8 +234,36 @@ export default function SettingsPage() {
         
         // Refresh the billing data to show updated values
         setTimeout(() => {
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
+            // credentials: "include"
+          })
+            .then(res => res.json())
+            .then(data => {
+              setFacilityInfo(prev => {
+                const info = {
+                  id: data.id || "",
+                  name: data.name || "",
+                  address: data.address || "",
+                  phone: data.phone || "",
+                  email: data.adminEmail || data.email || "",
+                  tagline: data.tagline || "",
+                  logoUrl: data.logoUrl || "",
+                  logoFile: null,
+                  logoPreview: null,
+                  brandColor: data.brandColor || "#3B82F6",
+                };
+                // Load invite system data after facilityInfo.id is set
+                if (info.id) {
+                  loadInviteData(info.id);
+                }
+                return info;
+              });
+            })
+            .catch(() => setSaveStatus("Failed to load facility info"));
+
+          // Load billing settings
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
-            credentials: 'include'
+            // credentials: "include"
           })
             .then(res => res.json())
             .then(data => {
@@ -186,29 +271,18 @@ export default function SettingsPage() {
                 monthlyPrice: data.monthlyPrice || "",
                 promoCode: data.promoCode || "",
                 stripePriceId: data.stripePriceId || "",
-              });
+              })
             })
-            .catch(() => setBillingSaveStatus("Failed to refresh billing settings"));
-        }, 1000);
-      } else {
-        const errorData = await res.json();
-        setBillingSaveStatus(errorData.message || "Failed to save billing settings");
+            .catch(() => setBillingSaveStatus("Failed to load billing settings"));
+        }, [])
+        setLogoError("Image upload failed. Please try a smaller image or check your connection.");
+        return;
       }
+      const data = await res.json();
+      setFacilityInfo(prev => ({ ...prev, logoUrl: data.logoUrl }));
     } catch (error) {
-      console.error("Error saving billing settings:", error);
-      setBillingSaveStatus("Failed to save billing settings");
+      setLogoError("Image upload failed. Please try again.");
     }
-  }
-
-  const handleLogoUpload = async (file: File) => {
-    const formData = new FormData();
-    formData.append('logo', file);
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/logo`, {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await res.json();
-    setFacilityInfo(prev => ({ ...prev, logoUrl: data.logoUrl }));
   };
 
   const handlePurchaseInvites = async (packageId: number) => {
@@ -244,9 +318,9 @@ export default function SettingsPage() {
       const data = await res.json();
       
       if (res.ok) {
-        setInviteStatus("Invite codes created successfully!");
-        loadInviteData(); // Reload data
-        setTimeout(() => setInviteStatus(""), 3000);
+  setInviteStatus("Invite codes created successfully!");
+  loadInviteData(facilityInfo.id); // Reload data
+  setTimeout(() => setInviteStatus(""), 3000);
       } else {
         setInviteStatus(data.message || "Failed to create invite codes");
       }
@@ -267,9 +341,9 @@ export default function SettingsPage() {
       const data = await res.json();
       
       if (res.ok) {
-        setInviteStatus("Purchase completed successfully!");
-        loadInviteData(); // Reload data
-        setTimeout(() => setInviteStatus(""), 3000);
+  setInviteStatus("Purchase completed successfully!");
+  loadInviteData(facilityInfo.id); // Reload data
+  setTimeout(() => setInviteStatus(""), 3000);
       } else {
         setInviteStatus(data.message || "Failed to complete purchase");
       }
@@ -295,9 +369,9 @@ export default function SettingsPage() {
       {/* Main Content */}
       <main className="p-6">
         <Tabs defaultValue="facility" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="facility">Facility Info</TabsTrigger>
-            <TabsTrigger value="billing">Billing & Subscription</TabsTrigger>
+            {/* <TabsTrigger value="billing">Billing & Subscription</TabsTrigger> */}
             <TabsTrigger value="invites">Flat Payment Invites</TabsTrigger>
           </TabsList>
 
@@ -316,15 +390,18 @@ export default function SettingsPage() {
                     <Label htmlFor="facilityName">Facility Name</Label>
                     <Input
                       id="facilityName"
-                      value={facilityInfo.name}
-                      onChange={(e) => setFacilityInfo({ ...facilityInfo, name: e.target.value })}
+                      value={`${facilityInfo?.name || user?.firstName} ${user?.lastName || "N/A"}`.trim()}
+                      onChange={(e) => {
+                        const fullName = e.target.value;
+                        const [firstName, ...lastNameParts] = fullName.split(" ");
+                      }}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone Number</Label>
                     <Input
                       id="phone"
-                      value={facilityInfo.phone}
+                      value={user?.phone || facilityInfo?.phone || "N/A"}
                       onChange={(e) => setFacilityInfo({ ...facilityInfo, phone: e.target.value })}
                     />
                   </div>
@@ -333,7 +410,7 @@ export default function SettingsPage() {
                   <Label htmlFor="address">Address</Label>
                   <Input
                     id="address"
-                    value={facilityInfo.address}
+                    value={facilityInfo?.address || ""}
                     onChange={(e) => setFacilityInfo({ ...facilityInfo, address: e.target.value })}
                   />
                 </div>
@@ -342,8 +419,8 @@ export default function SettingsPage() {
                   <Input
                     id="email"
                     type="email"
-                    value={facilityInfo.email}
-                    onChange={(e) => setFacilityInfo({ ...facilityInfo, email: e.target.value })}
+                    value={user?.email || "N/A"}
+                    onChange={(e) => {const email = e.target.value}}
                   />
                 </div>
 
@@ -366,11 +443,14 @@ export default function SettingsPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        // Upload to backend and set logoUrl
+                        // Frontend validation for max 10MB
+                        if (file.size > 10 * 1024 * 1024) {
+                          setLogoError("Max file size is 10MB. Please choose a smaller image.");
+                          return;
+                        }
+                        setLogoError("");
                         handleLogoUpload(file);
-                        // Only set in UI state for now; handle upload in backend logic if/when needed
                         setFacilityInfo(prev => ({ ...prev, logoFile: file }));
-                        // Optional: Local preview (does NOT affect backend)
                         const reader = new FileReader();
                         reader.onload = () => {
                           const result = reader.result;
@@ -383,6 +463,9 @@ export default function SettingsPage() {
                       }
                     }}
                   />
+                  {logoError && (
+                    <p className="text-sm text-red-600 mt-2">{logoError}</p>
+                  )}
                   {facilityInfo.logoPreview && (
                     <div className="mt-2">
                       <img
@@ -396,8 +479,19 @@ export default function SettingsPage() {
                   {!facilityInfo.logoPreview && facilityInfo.logoUrl && (
                     <div className="mt-2">
                       <img
-                        src={facilityInfo.logoUrl}
+                        src={facilityInfo.logoUrl.startsWith("/uploads/") ? `${process.env.NEXT_PUBLIC_API_URL}${facilityInfo.logoUrl}` : facilityInfo.logoUrl}
                         alt="Facility Logo"
+                        className="h-16 object-contain rounded border"
+                        onError={e => { e.currentTarget.src = "/placeholder-logo.png"; }}
+                      />
+                    </div>
+                  )}
+                  {/* Fallback if no logo */}
+                  {!facilityInfo.logoPreview && !facilityInfo.logoUrl && (
+                    <div className="mt-2">
+                      <img
+                        src="/placeholder-logo.png"
+                        alt="No Logo"
                         className="h-16 object-contain rounded border"
                       />
                     </div>
@@ -418,7 +512,7 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                <Button onClick={handleSave}>Save Changes</Button>
+                <Button onClick={handleSave}>{isLoading ? "Updating..." : "Save Changes"}</Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -519,7 +613,7 @@ export default function SettingsPage() {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {invitePackages.map((pkg: any) => (
+                      {Array.isArray(invitePackages) && invitePackages.map((pkg: any) => (
                         <Card key={pkg.id} className="border-2 hover:border-blue-300 transition-colors">
                           <CardContent className="p-4">
                             <div className="text-center">
@@ -533,68 +627,12 @@ export default function SettingsPage() {
                               <Button 
                                 onClick={() => handlePurchaseInvites(pkg.id)}
                                 className="w-full mt-4"
-                                disabled={isLoadingInvites}
                               >
                                 Purchase Package
                               </Button>
                             </div>
                           </CardContent>
                         </Card>
-                      ))}
-                    </div>
-                  )}
-                  {inviteStatus && (
-                    <p className="text-sm mt-4 text-red-600">{inviteStatus}</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Purchase History */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Purchase History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {invitePurchases.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">No purchases yet</p>
-                  ) : (
-                    <div className="space-y-3">
-                      {invitePurchases.map((purchase: any) => (
-                        <div key={purchase.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <p className="font-medium">{purchase.inviteCount} invites</p>
-                            <p className="text-sm text-gray-600">
-                              ${(purchase.totalPaidInCents / 100).toFixed(2)} - {purchase.status}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(purchase.purchasedAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={purchase.status === 'completed' ? 'default' : 'secondary'}>
-                              {purchase.status}
-                            </Badge>
-                            {purchase.status === 'pending' && purchase.stripeSessionId && (
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => handleCompletePurchase(purchase.stripeSessionId)}
-                                disabled={isLoadingInvites}
-                              >
-                                Complete Purchase
-                              </Button>
-                            )}
-                            {purchase.status === 'completed' && (
-                              <Button 
-                                size="sm" 
-                                onClick={() => handleCreateInvites(purchase.id, purchase.inviteCount)}
-                                disabled={isLoadingInvites}
-                              >
-                                Generate Invites
-                              </Button>
-                            )}
-                          </div>
-                        </div>
                       ))}
                     </div>
                   )}
@@ -613,7 +651,7 @@ export default function SettingsPage() {
                   </p>
                 </CardHeader>
                 <CardContent>
-                  {availableInvites.length === 0 ? (
+                  {(!Array.isArray(availableInvites) || availableInvites.length === 0) ? (
                     <p className="text-gray-500 text-center py-4">No available invites. Purchase a package to get invite codes.</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

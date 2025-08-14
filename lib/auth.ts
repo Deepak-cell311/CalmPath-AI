@@ -7,6 +7,7 @@ export interface User {
   firstName: string
   lastName: string
   accountType: string
+  facilityId?: string
   usedInviteCode?: boolean
 }
 

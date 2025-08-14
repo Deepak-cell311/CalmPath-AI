@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCw, Users, Activity, Calendar, CheckCircle, Loader2 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function FacilityDashboard() {
   const loading = useAuthRedirect();
+  const { user } = useAuth()
   const [lastUpdated, setLastUpdated] = useState("Just now");
+  const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
   const [status, setStatus] = useState({
     totalPatients: 0,
     activeSessions: 0,
@@ -18,23 +21,28 @@ export default function FacilityDashboard() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
+
+
   const fetchDashboardData = async () => {
     setIsLoading(true); // Start loading
     try {
       const [patientsRes, statusRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, { 
-          credentials: "include" 
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, {
+          credentials: "include"
         }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts`, { 
-          credentials: "include" 
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts`, {
+          credentials: "include"
         }),
       ]);
-  
+
       const patientsData = await patientsRes.json();
       const statusData = await statusRes.json();
-  
+
+      console.log("User: ", user)
+      console.log(`Patients Response is:  ${patientsRes} and Patients Data is: ${patientsData}`)
+
       const active = statusData.find((d: any) => d.status === "ok" || d.status === "good");
-  
+
       setPatients(patientsData);
       setStatus(s => ({
         ...s,
@@ -47,31 +55,51 @@ export default function FacilityDashboard() {
       setIsLoading(false); // End loading
     }
   };
-  
 
+  // If user id and patient id will be matched after that it will be shown into the frontend
   useEffect(() => {
-    if (!loading) {
-      setIsLoading(true); // Start loading
-      Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, { 
-          credentials: "include" 
-        }).then(res => res.json()),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts`, { 
-          credentials: "include" 
-        }).then(res => res.json())
-      ]).then(([patientsData, statusData]) => {
-        setStatus(s => ({ ...s, totalPatients: patientsData.length }));
-        setPatients(patientsData);
-        const active = statusData.find((d: any) => d.status === "ok" || d.status === "good");
-        setStatus(s => ({ ...s, activeSessions: active ? active.count : 0 }));
-      }).catch((error) => {
-        console.error("Error fetching dashboard data:", error);
-      }).finally(() => {
-        setIsLoading(false); // End loading
-      });
-      fetchDashboardData();
+    if (patients.length > 0 && user) {
+      const filtered = patients.filter((patient) => patient.userId === user.id);
+      setFilteredPatients(filtered);
+    } else {
+      setFilteredPatients([]); // fallback when no patients
     }
-  }, [loading]);
+  }, [patients, user]);
+
+  // 👇 Instead of using all patients for the status,
+  // filter them first by the logged-in user
+  useEffect(() => {
+    if (!loading && user) {
+      setIsLoading(true);
+      Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, {
+          credentials: "include"
+        }).then(res => res.json()),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts`, {
+          credentials: "include"
+        }).then(res => res.json())
+      ])
+        .then(([patientsData, statusData]) => {
+          // filter by user
+          const filtered = patientsData.filter((p: any) => p.userId === user.id);
+
+          setPatients(patientsData);
+          setFilteredPatients(filtered);
+
+          // Update counts consistently
+          setStatus(s => ({
+            ...s,
+            totalPatients: filtered.length, // only count relevant patients
+            activeSessions: statusData.find((d: any) => d.status === "ok" || d.status === "good")?.count || 0,
+          }));
+        })
+        .catch((error) => {
+          console.error("Error fetching dashboard data:", error);
+        })
+        .finally(() => setIsLoading(false));
+    }
+  }, [loading, user]);
+
 
   if (loading) return <div>Loading...</div>;
 
@@ -83,7 +111,6 @@ export default function FacilityDashboard() {
   const handleRefresh = () => {
     fetchDashboardData();
     setLastUpdated("Just now");
-    // Optionally, re-fetch data here
     window.location.reload();
   };
 
@@ -154,7 +181,7 @@ export default function FacilityDashboard() {
               <div className="text-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-4" />
               </div>
-            ) : patients.length === 0 ? (
+            ) : filteredPatients.length === 0 ? (
               <div className="text-center py-12">
                 <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No patients found</h3>
@@ -180,7 +207,7 @@ export default function FacilityDashboard() {
                           <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                         </td>
                       </tr>
-                    ) : patients.map((p) => (
+                    ) : filteredPatients.map((p) => (
                       <tr key={p.id}>
                         <td className="px-4 py-2 whitespace-nowrap">{p.firstName} {p.lastName}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{p.status}</td>

@@ -30,8 +30,8 @@ export interface Patient {
 
 export async function createPatient(patient: Omit<Patient, 'id' | 'lastInteraction' | 'admissionDate' | 'createdAt' | 'updatedAt'>): Promise<Patient> {
   const query = `
-    INSERT INTO patients (first_name, last_name, email, phone, age, status, care_level, room_number, medical_notes, emergency_contact, emergency_phone, facility_id, is_active)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    INSERT INTO patients (first_name, last_name, email, phone, age, status, care_level, room_number, medical_notes, emergency_contact, emergency_phone, facility_id, user_id, is_active)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     RETURNING *
   `
   const values = [
@@ -47,6 +47,7 @@ export async function createPatient(patient: Omit<Patient, 'id' | 'lastInteracti
     patient.emergencyContact, 
     patient.emergencyPhone, 
     patient.facilityId, 
+    patient.userId || null, // Set to null if userId not provided
     patient.isActive !== false
   ]
   

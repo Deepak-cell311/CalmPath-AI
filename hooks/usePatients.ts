@@ -1,166 +1,130 @@
-import { useState, useEffect, useCallback } from 'react'
-import { apiClient, Patient, CreatePatientRequest, PatientStats } from '@/lib/api'
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '../lib/api';
+import type { CreatePatientRequest, Patient, PatientStats } from '../lib/api';
+import { useAuth } from "@/hooks/useAuth"
 
-interface UsePatientsReturn {
-  patients: Patient[]
-  stats: PatientStats | null
-  loading: boolean
-  error: string | null
-  createPatient: (data: CreatePatientRequest) => Promise<boolean>
-  deletePatient: (id: string) => Promise<boolean>
-  updatePatientStatus: (id: string, status: Patient['status']) => Promise<boolean>
-  refreshPatients: () => Promise<void>
-}
-
-export function usePatients(facilityId?: string): UsePatientsReturn {
-  const [patients, setPatients] = useState<Patient[]>([])
-  const [stats, setStats] = useState<PatientStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export function usePatients(facilityId?: string) {
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [stats, setStats] = useState<PatientStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const {user} = useAuth()
 
   const fetchPatients = useCallback(async () => {
+    if (!facilityId) {
+      console.log("usePatients: No facilityId provided, skipping fetch");
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
     try {
-      setLoading(true)
-      setError(null)
-      
-      const response = await apiClient.getPatients(facilityId, true)
+      console.log("usePatients: Fetching patients for facilityId:", facilityId);
+      const response = await apiClient.getPatients(facilityId, true);
+      console.log("usePatients: Received response:", response);
       
       if (response.error) {
-        setError(response.error)
-        return
+        setError(response.error);
+        return;
       }
       
       if (response.data) {
-        setPatients(response.data.patients ?? [])
-        setStats(response.data.stats || null)
+        setPatients(response.data.patients || []);
+        setStats(response.data.stats || null);
       }
     } catch (err) {
-      setError('Failed to fetch patients')
-      console.error('Error fetching patients:', err)
+      console.error("usePatients: Error fetching patients:", err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch patients');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [facilityId])
+  }, [facilityId]);
+
+  useEffect(() => {
+    console.log("usePatients: useEffect triggered with facilityId:", facilityId);
+    if (facilityId) {
+      fetchPatients();
+    } else {
+      console.log("usePatients: No facilityId, clearing patients");
+      setPatients([]);
+      setStats(null);
+    }
+  }, [facilityId, fetchPatients]);
 
   const createPatient = useCallback(async (data: CreatePatientRequest): Promise<boolean> => {
     try {
       setError(null)
       
-      const response = await apiClient.createPatient({
+      const patientData = {
         ...data,
         facility_id: facilityId,
-      })
+        userId: user?.id,
+      }
+      
+      console.log("usePatients: Creating patient with data:", patientData);
+      console.log("usePatients: facilityId being used:", facilityId);
+      
+      const response = await apiClient.createPatient(patientData)
+      console.log("usePatients: Patient creation response:", response);
       
       if (response.error) {
-        setError(response.error)
-        return false
+        setError(response.error);
+        return false;
       }
       
-      if (response.data) {
-        // Add the new patient to the list
-        setPatients(prev => [response.data!.patient, ...prev])
-        
-        // Update stats
-        if (stats) {
-          setStats(prev => prev ? {
-            ...prev,
-            total: prev.total + 1,
-            invited: prev.invited + 1,
-          } : null)
-        }
-        
-        return true
-      }
+      // Refresh the patients list
+      await fetchPatients();
       
-      return false
+      return true;
     } catch (err) {
-      setError('Failed to create patient')
-      console.error('Error creating patient:', err)
-      return false
+      console.error("usePatients: Error creating patient:", err);
+      setError(err instanceof Error ? err.message : 'Failed to create patient');
+      return false;
     }
-  }, [facilityId, stats])
+  }, [facilityId, fetchPatients]);
 
   const deletePatient = useCallback(async (id: string): Promise<boolean> => {
     try {
-      setError(null)
-      
-      const response = await apiClient.deletePatient(id)
+      setError(null);
+      const response = await apiClient.deletePatient(id);
       
       if (response.error) {
-        setError(response.error)
-        return false
+        setError(response.error);
+        return false;
       }
       
-      // Remove the patient from the list
-      setPatients(prev => prev.filter(patient => patient && patient.id !== id))
+      // Refresh the patients list
+      await fetchPatients();
       
-      // Update stats
-      if (stats) {
-        const deletedPatient = patients.find(p => p && p.id === id)
-        if (deletedPatient) {
-          setStats(prev => prev ? {
-            ...prev,
-            total: prev.total - 1,
-            [deletedPatient.status.toLowerCase()]: prev[deletedPatient.status.toLowerCase() as keyof PatientStats] - 1,
-          } : null)
-        }
-      }
-      
-      return true
+      return true;
     } catch (err) {
-      setError('Failed to delete patient')
-      console.error('Error deleting patient:', err)
-      return false
+      console.error("usePatients: Error deleting patient:", err);
+      setError(err instanceof Error ? err.message : 'Failed to delete patient');
+      return false;
     }
-  }, [patients, stats])
+  }, [fetchPatients]);
 
   const updatePatientStatus = useCallback(async (id: string, status: Patient['status']): Promise<boolean> => {
     try {
-      setError(null)
-      
-      const response = await apiClient.updatePatientStatus(id, status)
+      setError(null);
+      const response = await apiClient.updatePatientStatus(id, status);
       
       if (response.error) {
-        setError(response.error)
-        return false
+        setError(response.error);
+        return false;
       }
       
-      if (response.data) {
-        // Update the patient in the list
-        setPatients(prev => prev.map(patient => 
-          patient && patient.id === id ? response.data!.patient : patient
-        ))
-        
-        // Update stats
-        if (stats) {
-          const oldPatient = patients.find(p => p && p.id === id)
-          if (oldPatient) {
-            setStats(prev => prev ? {
-              ...prev,
-              [oldPatient.status.toLowerCase()]: prev[oldPatient.status.toLowerCase() as keyof PatientStats] - 1,
-              [status.toLowerCase()]: prev[status.toLowerCase() as keyof PatientStats] + 1,
-            } : null)
-          }
-        }
-        
-        return true
-      }
+      // Refresh the patients list
+      await fetchPatients();
       
-      return false
+      return true;
     } catch (err) {
-      setError('Failed to update patient status')
-      console.error('Error updating patient status:', err)
-      return false
+      console.error("usePatients: Error updating patient status:", err);
+      setError(err instanceof Error ? err.message : 'Failed to update patient status');
+      return false;
     }
-  }, [patients, stats])
-
-  const refreshPatients = useCallback(async () => {
-    await fetchPatients()
-  }, [fetchPatients])
-
-  useEffect(() => {
-    fetchPatients()
-  }, [fetchPatients])
+  }, [fetchPatients]);
 
   return {
     patients,
@@ -170,6 +134,6 @@ export function usePatients(facilityId?: string): UsePatientsReturn {
     createPatient,
     deletePatient,
     updatePatientStatus,
-    refreshPatients,
-  }
+    refetch: fetchPatients
+  };
 } 

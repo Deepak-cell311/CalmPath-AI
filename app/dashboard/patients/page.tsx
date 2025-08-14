@@ -2,31 +2,29 @@
 
 import type React from "react"
 
+import { useAuth } from "@/hooks/useAuth"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Users, Plus, Mail, Phone, Calendar, Edit, Trash2, Loader2, PhoneCall } from "lucide-react"
+import { Users, Plus, Mail, Phone, Calendar, Edit, Trash2, Loader2, PhoneCall, Loader2Icon } from "lucide-react"
 import { usePatients } from "@/hooks/usePatients"
 import { toast } from "sonner"
 
 export default function PatientManagement() {
+
+  const { user } = useAuth();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [patients, setPatients] = useState<any[]>([]);
+  const [filterUserId, setFilterUserId] = useState("");
+  const [filteredPatients, setFilteredPatients] = useState<any[]>([]);
   const [inviteForm, setInviteForm] = useState({
     firstName: "",
     lastName: "",
@@ -50,7 +48,7 @@ export default function PatientManagement() {
     createPatient,
     deletePatient,
     updatePatientStatus
-  } = usePatients()
+  } = usePatients(user?.facilityId)
 
   const handleInvitePatient = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,18 +71,18 @@ export default function PatientManagement() {
 
       if (success) {
         toast.success("Patient invitation sent successfully!")
-        setInviteForm({ 
-          firstName: "", 
-          lastName: "", 
-          email: "", 
-          phone: "", 
-          age: "", 
-          care_level: "low", 
-          roomNumber: "", 
-          medicalNotes: "", 
-          emergencyContact: "", 
-          emergencyPhone: "", 
-          message: "" 
+        setInviteForm({
+          firstName: "",
+          lastName: "",
+          email: "",
+          phone: "",
+          age: "",
+          care_level: "low",
+          roomNumber: "",
+          medicalNotes: "",
+          emergencyContact: "",
+          emergencyPhone: "",
+          message: ""
         })
         setIsInviteDialogOpen(false);
         await fetchPatients();
@@ -125,9 +123,15 @@ export default function PatientManagement() {
     }
   }
 
-  const fetchPatients = async () => {
+  const fetchPatients = async (userId?: string) => {
+    setIsLoading(true);
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, {
+      const url = new URL(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`);
+      if (userId) {
+        url.searchParams.append('userId', userId);
+      }
+
+      const res = await fetch(url.toString(), {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -144,12 +148,41 @@ export default function PatientManagement() {
       console.log("Fetched patients:", patientsData);
     } catch (error) {
       console.error("Error fetching patients:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchPatients()
   }, [])
+
+  // If user id and patient id will be matched after that it will be shown into the frontend
+  useEffect(() => {
+    if (patients.length && user?.id) {
+      const filtered = patients.filter(patient => patient.userId === user.id);
+      setFilteredPatients(filtered);
+      console.log("Filtered patients:", filtered);
+    }
+  }, [patients, user]);
+
+  // useEffect(() => {
+  //   if (filterUserId.trim() === "") {
+  //     setFilteredPatients(patients);
+  //   } else {
+  //     const filtered = patients.filter(patient => 
+  //       patient.userId && patient.userId.toLowerCase().includes(filterUserId.toLowerCase())
+  //     );
+  //     setFilteredPatients(filtered);
+  //   }
+  // }, [patients, filterUserId]);
+
+
+  // Console log 
+  console.log("User: ", user)
+  console.log("Patient: ", patients)
+  console.log("Filtered Patients: ", filteredPatients)
+
 
   return (
     <>
@@ -339,7 +372,7 @@ export default function PatientManagement() {
                     {loading ? (
                       <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                     ) : (
-                      stats?.total || patients?.length
+                      stats?.total || filteredPatients?.length
                     )}
                   </p>
                 </div>
@@ -353,7 +386,7 @@ export default function PatientManagement() {
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Active Patients</p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {loading ? (
+                    {isLoading ? (
                       <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                     ) : (
                       stats?.active ?? (Array.isArray(patients) ? patients.filter((p) => p && p.status === "Active").length : 0)
@@ -370,7 +403,7 @@ export default function PatientManagement() {
                 <div>
                   <p className="text-sm font-medium text-gray-600 mb-1">Pending Invites</p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {loading ? (
+                    {isLoading ? (
                       <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                     ) : (
                       stats?.invited ?? (Array.isArray(patients) ? patients.filter((p) => p && p.status === "Invited").length : 0)
@@ -396,12 +429,12 @@ export default function PatientManagement() {
             <CardTitle>Patient List</CardTitle>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {isLoading ? (
               <div className="text-center py-12">
                 <Loader2 className="w-16 h-16 animate-spin text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">Loading patients...</p>
               </div>
-            ) : patients.length === 0 ? (
+            ) : filteredPatients.length === 0 ? (
               <div className="text-center py-12">
                 <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No patients yet</h3>
@@ -416,6 +449,7 @@ export default function PatientManagement() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    {/* <TableHead>User ID</TableHead> */}
                     <TableHead>Contact</TableHead>
                     <TableHead>Age/Room</TableHead>
                     <TableHead>Care Level</TableHead>
@@ -426,11 +460,16 @@ export default function PatientManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {patients.map((patient) => (
+                  {filteredPatients.map((patient) => (
                     <TableRow key={patient.id}>
                       <TableCell className="font-medium">
                         {patient.firstName} {patient.lastName}
                       </TableCell>
+                      {/* <TableCell>
+                        <span className="text-sm text-gray-600 font-mono">
+                          {patient.userId || 'N/A'}
+                        </span>
+                      </TableCell> */}
                       <TableCell>
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 text-sm">
@@ -456,11 +495,10 @@ export default function PatientManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          patient.care_level === 'high' ? 'bg-red-100 text-red-800' :
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${patient.care_level === 'high' ? 'bg-red-100 text-red-800' :
                           patient.care_level === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-green-100 text-green-800'
-                        }`}>
+                            'bg-green-100 text-green-800'
+                          }`}>
                           {patient.care_level || 'low'}
                         </span>
                       </TableCell>

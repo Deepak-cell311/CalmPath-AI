@@ -38,17 +38,55 @@ export default function SignupPage() {
   const [patientAccessCode, setPatientAccessCode] = useState("")
   const [facilityId, setfacilityId] = useState("")
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const [error, setError] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    validateField(field, value);
   }
+
+  const validateField = (field: string, value: string) => {
+    let error = "";
+
+    switch (field) {
+      case "firstName":
+        if (!value.trim()) error = "First name is required";
+        break;
+      case "lastName":
+        if (!value.trim()) error = "Last name is required";
+        break;
+      case "email":
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          error = "Enter a valid email address";
+        }
+        break;
+      case "phoneNumber":
+        if (!/^\d{10}$/.test(value)) {
+          error = "Phone number must be 10 digits";
+        }
+        break;
+      case "password":
+        if (value.length < 6) {
+          error = "Password must be at least 6 characters";
+        }
+        break;
+      case "confirmPassword":
+        if (value !== formData.password) {
+          error = "Passwords do not match";
+        }
+        break;
+    }
+
+    setFieldErrors((prev) => ({ ...prev, [field]: error }));
+  };
+
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    setError(null);
+    setApiError(null);
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`, {
@@ -74,8 +112,11 @@ export default function SignupPage() {
 
 
       if (!response.ok) {
-        // Show first error if available
-        setError(result.message || "Signup failed");
+        if (result.errors) {
+          setFieldErrors((prev) => ({ ...prev, ...result.errors }));
+        } else {
+          setApiError(result.message ||"Something went wrong");
+        }
         setIsLoading(false);
         return;
       }
@@ -84,9 +125,9 @@ export default function SignupPage() {
       setIsLoading(false);
       window.location.href = "/auth/login";
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Signup error:", err);
-      setError("Something went wrong. Please try again.");
+      setApiError(err || "Something went wrong");
       setIsLoading(false);
     }
   };
@@ -113,6 +154,7 @@ export default function SignupPage() {
           <CardHeader>
             <CardTitle>Join CalmPath</CardTitle>
             <CardDescription>Create an account to get started</CardDescription>
+            {apiError && <p className="text-red-500 mb-4">{apiError}</p>}
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSignup} className="space-y-4">
@@ -140,6 +182,9 @@ export default function SignupPage() {
                     onChange={(e) => handleInputChange("firstName", e.target.value)}
                     required
                   />
+                  {fieldErrors.firstName && (
+                    <p className="text-red-500 text-sm">{fieldErrors.firstName}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name</Label>
@@ -151,6 +196,9 @@ export default function SignupPage() {
                     onChange={(e) => handleInputChange("lastName", e.target.value)}
                     required
                   />
+                  {fieldErrors.lastName && (
+                    <p className="text-red-500 text-sm">{fieldErrors.lastName}</p>
+                  )}
                 </div>
               </div>
 
@@ -165,6 +213,9 @@ export default function SignupPage() {
                   onChange={(e) => handleInputChange("email", e.target.value)}
                   required
                 />
+                {fieldErrors.email && (
+                  <p className="text-red-500 text-sm">{fieldErrors.email}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -178,6 +229,9 @@ export default function SignupPage() {
                   onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
                   required
                 />
+                {fieldErrors.phoneNumber && (
+                  <p className="text-red-500 text-sm">{fieldErrors.phoneNumber}</p>
+                )}
               </div>
 
               {/* Conditional fields based on user type */}
@@ -191,6 +245,9 @@ export default function SignupPage() {
                     onChange={(e) => handleInputChange("facilityName", e.target.value)}
                     required
                   />
+                  {fieldErrors.facilityName && (
+                    <p className="text-red-500 text-sm">{fieldErrors.facilityName}</p>
+                  )}
                 </div>
                 {/* <div className="space-y-2">
                   <Label htmlFor="facilityName">Facility Id</Label>
@@ -202,7 +259,7 @@ export default function SignupPage() {
                     required
                   />
                 </div>  */}
-                </>
+              </>
               )}
 
               {userType === "Family Member" && (
@@ -250,6 +307,9 @@ export default function SignupPage() {
                   onChange={(e) => handleInputChange("password", e.target.value)}
                   required
                 />
+                {fieldErrors.password && (
+                  <p className="text-red-500 text-sm">{fieldErrors.password}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -263,6 +323,9 @@ export default function SignupPage() {
                   onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
                   required
                 />
+                {fieldErrors.confirmPassword && (
+                  <p className="text-red-500 text-sm">{fieldErrors.confirmPassword}</p>
+                )}
               </div>
 
               <Button type="submit" className="w-full" disabled={isLoading || !userType}>
