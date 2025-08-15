@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { CreditCard, DollarSign, Download, Bell, Building, Users, Gift } from "lucide-react"
 import { useAuth } from "@/hooks/useAuth"
+import { authClient } from "@/lib/auth"
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -46,9 +47,9 @@ export default function SettingsPage() {
   const [billingSaveStatus, setBillingSaveStatus] = useState("");
 
   // Invite system state
-  const [invitePackages, setInvitePackages] = useState([]);
-  const [invitePurchases, setInvitePurchases] = useState([]);
-  const [availableInvites, setAvailableInvites] = useState([]);
+  const [invitePackages, setInvitePackages] = useState<any[]>([]);
+  const [invitePurchases, setInvitePurchases] = useState<any[]>([]);
+  const [availableInvites, setAvailableInvites] = useState<any[]>([]);
   const [isLoadingInvites, setIsLoadingInvites] = useState(false);
   const [inviteStatus, setInviteStatus] = useState("");
 
@@ -75,7 +76,9 @@ export default function SettingsPage() {
 
     // Load facility info
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
-      // credentials: "include"
+      headers: {
+        'Authorization': `Bearer ${authClient.getToken()}`
+      }
     })
       .then((res) => res.json())
       .then((data) => {
@@ -98,7 +101,9 @@ export default function SettingsPage() {
 
     // Load billing settings
     fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
-      // credentials: "include"
+      headers: {
+        'Authorization': `Bearer ${authClient.getToken()}`
+      }
     })
       .then(res => res.json())
       .then(data => {
@@ -133,8 +138,8 @@ export default function SettingsPage() {
 
       // Load invite packages
       const packagesRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-packages?facilityId=${encodeURIComponent(facilityId)}`,
-        { credentials: 'include' }
+        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-packages`,
+        { headers: { 'Authorization': `Bearer ${authClient.getToken()}` } }
       );
       
       if (packagesRes.ok) {
@@ -147,8 +152,8 @@ export default function SettingsPage() {
 
       // Load invite purchases
       const purchasesRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-purchases?facilityId=${encodeURIComponent(facilityId)}`,
-        { credentials: 'include' }
+        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-purchases`,
+        { headers: { 'Authorization': `Bearer ${authClient.getToken()}` } }
       );
       
       if (purchasesRes.ok) {
@@ -161,8 +166,8 @@ export default function SettingsPage() {
 
       // Load available invites
       const invitesRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/available-invites?facilityId=${encodeURIComponent(facilityId)}`,
-        { credentials: 'include' }
+        `${process.env.NEXT_PUBLIC_API_URL}/api/facility/available-invites`,
+        { headers: { 'Authorization': `Bearer ${authClient.getToken()}` } }
       );
       
       if (invitesRes.ok) {
@@ -190,8 +195,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // credentials: "include",
+        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${authClient.getToken()}` },
         body: JSON.stringify(facilityInfo), // Send id as well
       });
       if (res.ok) {
@@ -213,7 +217,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", 'Authorization': `Bearer ${authClient.getToken()}` },
         body: JSON.stringify({
           monthlyPrice: facilityBilling.monthlyPrice,
           promoCode: facilityBilling.promoCode,
@@ -235,7 +239,7 @@ export default function SettingsPage() {
         // Refresh the billing data to show updated values
         setTimeout(() => {
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
-            // credentials: "include"
+            headers: { 'Authorization': `Bearer ${authClient.getToken()}` }
           })
             .then(res => res.json())
             .then(data => {
@@ -254,7 +258,7 @@ export default function SettingsPage() {
                 };
                 // Load invite system data after facilityInfo.id is set
                 if (info.id) {
-                  loadInviteData(info.id);
+                  loadInviteData();
                 }
                 return info;
               });
@@ -263,7 +267,7 @@ export default function SettingsPage() {
 
           // Load billing settings
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/billing`, {
-            // credentials: "include"
+            headers: { 'Authorization': `Bearer ${authClient.getToken()}` }
           })
             .then(res => res.json())
             .then(data => {
@@ -274,7 +278,7 @@ export default function SettingsPage() {
               })
             })
             .catch(() => setBillingSaveStatus("Failed to load billing settings"));
-        }, [])
+        }, 500)
         setLogoError("Image upload failed. Please try a smaller image or check your connection.");
         return;
       }
@@ -289,7 +293,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/purchase-invites`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authClient.getToken()}` },
         body: JSON.stringify({ packageId }),
       });
       
@@ -298,6 +302,10 @@ export default function SettingsPage() {
       if (res.ok && data.url) {
         // Redirect to Stripe checkout
         window.location.href = data.url;
+      } else if (res.ok && data.simulated) {
+        setInviteStatus("Invites created (dev mode)");
+        await loadInviteData();
+        setTimeout(() => setInviteStatus(""), 3000);
       } else {
         setInviteStatus("Failed to create checkout session");
       }
@@ -311,7 +319,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/create-invites`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authClient.getToken()}` },
         body: JSON.stringify({ purchaseId, inviteCount }),
       });
       
@@ -319,7 +327,7 @@ export default function SettingsPage() {
       
       if (res.ok) {
   setInviteStatus("Invite codes created successfully!");
-  loadInviteData(facilityInfo.id); // Reload data
+  loadInviteData(); // Reload data
   setTimeout(() => setInviteStatus(""), 3000);
       } else {
         setInviteStatus(data.message || "Failed to create invite codes");
@@ -334,7 +342,7 @@ export default function SettingsPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/test-webhook`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authClient.getToken()}` },
         body: JSON.stringify({ sessionId }),
       });
       
@@ -342,7 +350,7 @@ export default function SettingsPage() {
       
       if (res.ok) {
   setInviteStatus("Purchase completed successfully!");
-  loadInviteData(facilityInfo.id); // Reload data
+  loadInviteData(); // Reload data
   setTimeout(() => setInviteStatus(""), 3000);
       } else {
         setInviteStatus(data.message || "Failed to complete purchase");
@@ -350,6 +358,54 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Error completing purchase:", error);
       setInviteStatus("Failed to complete purchase");
+    }
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/logo`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        throw new Error('Upload failed');
+      }
+      const data = await res.json();
+      setFacilityInfo(prev => ({ ...prev, logoUrl: data.logoUrl }));
+    } catch (error) {
+      console.error('Logo upload error:', error);
+      setLogoError('Image upload failed. Please try again.');
+    }
+  }
+
+  const handleTestWebhook = async () => {
+    if (!invitePurchases.length) {
+      setInviteStatus("No recent purchase to test webhook for.");
+      return;
+    }
+    const latestPurchase = invitePurchases[invitePurchases.length - 1];
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/test-webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authClient.getToken()}` },
+        body: JSON.stringify({ sessionId: latestPurchase.stripeSessionId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setInviteStatus(`Webhook triggered successfully for session: ${latestPurchase.stripeSessionId}. Response: ${data.message}`);
+        // Reload invite data after successful webhook test
+        setTimeout(() => {
+          loadInviteData();
+          setInviteStatus("");
+        }, 2000);
+      } else {
+        setInviteStatus(`Failed to trigger webhook for session: ${latestPurchase.stripeSessionId}. Error: ${data.message}`);
+      }
+    } catch (error) {
+      console.error("Error triggering webhook:", error);
+      setInviteStatus("Failed to trigger webhook. Please check console.");
     }
   };
 
@@ -401,7 +457,7 @@ export default function SettingsPage() {
                     <Label htmlFor="phone">Phone Number</Label>
                     <Input
                       id="phone"
-                      value={user?.phone || facilityInfo?.phone || "N/A"}
+                      value={facilityInfo?.phone || ""}
                       onChange={(e) => setFacilityInfo({ ...facilityInfo, phone: e.target.value })}
                     />
                   </div>
@@ -639,6 +695,7 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
 
+
               {/* Available Invites */}
               <Card>
                 <CardHeader>
@@ -661,7 +718,10 @@ export default function SettingsPage() {
                             {invite.inviteCode}
                           </p>
                           <p className="text-xs text-gray-500 mt-1 text-center">
-                            Expires: {new Date(invite.expiresAt).toLocaleDateString()}
+                            Status: {invite.status || 'unused'}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1 text-center">
+                            Created: {new Date(invite.createdAt).toLocaleDateString()}
                           </p>
                         </div>
                       ))}

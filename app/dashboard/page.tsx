@@ -26,11 +26,19 @@ export default function FacilityDashboard() {
   const fetchDashboardData = async () => {
     setIsLoading(true); // Start loading
     try {
+      // Build the patients API URL with proper filtering
+      let patientsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/patients`;
+      if (user?.accountType === "Facility Staff" && user?.facilityId) {
+        patientsUrl += `?facilityId=${user.facilityId}`;
+      } else if (user?.id) {
+        patientsUrl += `?userId=${user.id}`;
+      }
+
       const [patientsRes, statusRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, {
+        fetch(patientsUrl, {
           credentials: "include"
         }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts?${user?.accountType === "Facility Staff" && user?.facilityId ? `facilityId=${user.facilityId}` : `userId=${user?.id}`}`, {
           credentials: "include"
         }),
       ]);
@@ -43,10 +51,18 @@ export default function FacilityDashboard() {
 
       const active = statusData.find((d: any) => d.status === "ok" || d.status === "good");
 
+      // For facility staff, patients are already filtered by facilityId
+      // For individual users, filter by userId
+      let filtered = patientsData;
+      if (user?.accountType !== "Facility Staff") {
+        filtered = patientsData.filter((p: any) => p.userId === user?.id);
+      }
+
       setPatients(patientsData);
+      setFilteredPatients(filtered);
       setStatus(s => ({
         ...s,
-        totalPatients: patientsData.length,
+        totalPatients: filtered.length, // only count relevant patients
         activeSessions: active ? active.count : 0,
       }));
     } catch (error) {
@@ -59,7 +75,14 @@ export default function FacilityDashboard() {
   // If user id and patient id will be matched after that it will be shown into the frontend
   useEffect(() => {
     if (patients.length > 0 && user) {
-      const filtered = patients.filter((patient) => patient.userId === user.id);
+      let filtered;
+      if (user.accountType === "Facility Staff") {
+        // For facility staff, patients are already filtered by facilityId from the API
+        filtered = patients;
+      } else {
+        // For individual users, filter by userId
+        filtered = patients.filter((patient) => patient.userId === user.id);
+      }
       setFilteredPatients(filtered);
     } else {
       setFilteredPatients([]); // fallback when no patients
@@ -71,17 +94,29 @@ export default function FacilityDashboard() {
   useEffect(() => {
     if (!loading && user) {
       setIsLoading(true);
+      // Build the patients API URL with proper filtering
+      let patientsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/patients`;
+      if (user.accountType === "Facility Staff" && user.facilityId) {
+        patientsUrl += `?facilityId=${user.facilityId}`;
+      } else {
+        patientsUrl += `?userId=${user.id}`;
+      }
+
       Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients`, {
+        fetch(patientsUrl, {
           credentials: "include"
         }).then(res => res.json()),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/status-counts?${user?.accountType === "Facility Staff" && user?.facilityId ? `facilityId=${user.facilityId}` : `userId=${user?.id}`}`, {
           credentials: "include"
         }).then(res => res.json())
       ])
         .then(([patientsData, statusData]) => {
-          // filter by user
-          const filtered = patientsData.filter((p: any) => p.userId === user.id);
+          // For facility staff, patients are already filtered by facilityId
+          // For individual users, filter by userId
+          let filtered = patientsData;
+          if (user.accountType !== "Facility Staff") {
+            filtered = patientsData.filter((p: any) => p.userId === user.id);
+          }
 
           setPatients(patientsData);
           setFilteredPatients(filtered);
