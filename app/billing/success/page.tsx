@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, ArrowRight, Home } from 'lucide-react';
 
@@ -15,7 +15,7 @@ interface PaymentDetails {
   metadata?: Record<string, string>;
 }
 
-export default function BillingSuccessPage() {
+function BillingSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [paymentDetails, setPaymentDetails] = useState<PaymentDetails | null>(null);
@@ -156,6 +156,7 @@ export default function BillingSuccessPage() {
             onClick={() => router.push('/family-dashboard')}
             className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-all duration-200 flex items-center justify-center gap-2 hover:scale-105"
           >
+            <ArrowRight className="w-4 h-4" />
             Go to Dashboard
           </button>
         </div>
@@ -171,5 +172,24 @@ export default function BillingSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function BillingSuccessPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <BillingSuccessContent />
+    </Suspense>
   );
 }
