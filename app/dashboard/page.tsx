@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCw, Users, Activity, Calendar, CheckCircle, Loader2 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { InviteUsageStats } from "@/components/InviteUsageStats";
 
 export default function FacilityDashboard() {
   const loading = useAuthRedirect();
@@ -189,6 +190,11 @@ export default function FacilityDashboard() {
             </Card>
           ))}
         </div>
+
+        {/* Invite Usage Statistics */}
+        {/* <div className="mb-8">
+          <InviteUsageStats />
+        </div> */}
 
         {/* Patient Activity Monitor */}
         <Card>

@@ -1,6 +1,5 @@
 import { useState, useEffect, createContext, useContext } from 'react'
 import { authClient, User } from '@/lib/auth'
-import { useAuth } from '@/hooks/useAuth'
 
 interface AuthContextType {
   user: User | null

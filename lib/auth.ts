@@ -53,20 +53,44 @@ class AuthClient {
   // Token management
   setToken(token: string): void {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('authToken', token)
+      console.log("AuthClient: Storing token:", token.substring(0, 20) + "...")
+      console.log("AuthClient: localStorage available:", !!window.localStorage)
+      console.log("AuthClient: Current localStorage authToken:", localStorage.getItem('authToken')?.substring(0, 20) + "...")
+      
+      try {
+        localStorage.setItem('authToken', token)
+        console.log("AuthClient: Token stored successfully")
+      } catch (error) {
+        console.error("AuthClient: Error storing token:", error)
+      }
+      
+      console.log("AuthClient: Token stored, verifying:", localStorage.getItem('authToken')?.substring(0, 20) + "...")
     }
   }
 
   getToken(): string | null {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('authToken')
+      try {
+        const token = localStorage.getItem('authToken')
+        console.log("AuthClient: Retrieved token:", token ? token.substring(0, 20) + "..." : "null")
+        return token
+      } catch (error) {
+        console.error("AuthClient: Error retrieving token:", error)
+        return null
+      }
     }
     return null
   }
 
   removeToken(): void {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('authToken')
+      try {
+        console.log("AuthClient: Removing token")
+        localStorage.removeItem('authToken')
+        console.log("AuthClient: Token removed successfully")
+      } catch (error) {
+        console.error("AuthClient: Error removing token:", error)
+      }
     }
   }
 
@@ -76,6 +100,8 @@ class AuthClient {
 
   // Authentication methods
   async login(email: string, password: string, accountType: "Patient" | "Family Member" | "Facility Staff", inviteCode?: string): Promise<LoginResponse> {
+    console.log("AuthClient: Login attempt for:", email, accountType)
+    
     const data = await this.request<LoginResponse>('/api/auth/login-token', {
       method: 'POST',
       body: JSON.stringify({
@@ -86,12 +112,15 @@ class AuthClient {
       }),
     })
 
+    console.log("AuthClient: Login successful, storing token")
     // Store the token
     this.setToken(data.token)
     return data
   }
 
   async inviteLogin(email: string, inviteCode: string, accountType: "Patient" | "Family Member" | "Facility Staff"): Promise<LoginResponse> {
+    console.log("AuthClient: Invite login attempt for:", email, accountType, inviteCode)
+    
     const data = await this.request<LoginResponse>('/api/auth/invite-login', {
       method: 'POST',
       body: JSON.stringify({
@@ -101,12 +130,14 @@ class AuthClient {
       }),
     })
 
+    console.log("AuthClient: Invite login successful, storing token")
     // Store the token
     this.setToken(data.token)
     return data
   }
 
   async getCurrentUser(): Promise<User> {
+    console.log("AuthClient: Getting current user")
     return this.request<User>('/api/auth/user-token')
   }
 
@@ -120,10 +151,12 @@ class AuthClient {
     if (!token) return null
 
     try {
+      console.log("AuthClient: Decoding token:", token.substring(0, 20) + "...")
       const decoded = JSON.parse(Buffer.from(token, 'base64').toString())
+      console.log("AuthClient: Token decoded successfully:", decoded)
       return decoded
     } catch (error) {
-      console.error('Error decoding token:', error)
+      console.error('AuthClient: Error decoding token:', error)
       return null
     }
   }

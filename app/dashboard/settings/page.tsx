@@ -12,6 +12,7 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { CreditCard, DollarSign, Download, Bell, Building, Users, Gift } from "lucide-react"
 import { useAuth } from "@/hooks/useAuth"
 import { authClient } from "@/lib/auth"
+import { InviteUsageStats } from "@/components/InviteUsageStats"
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -189,6 +190,34 @@ export default function SettingsPage() {
     }
   };
 
+  const refreshFacilityInfo = async () => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
+        headers: {
+          'Authorization': `Bearer ${authClient.getToken()}`
+        }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setFacilityInfo({
+          id: data.id || "",
+          name: data.name || "",
+          address: data.address || "",
+          phone: data.phone || "",
+          email: data.adminEmail || data.email || "",
+          tagline: data.tagline || "",
+          logoUrl: data.logoUrl || "",
+          logoFile: null,
+          logoPreview: null,
+          brandColor: data.brandColor || "#3B82F6",
+        });
+      }
+    } catch (error) {
+      console.error("Error refreshing facility info:", error);
+    }
+  };
+
   const handleSave = async () => {
     setIsLoading(true);
     setSaveStatus(null);
@@ -200,6 +229,7 @@ export default function SettingsPage() {
       });
       if (res.ok) {
         setSaveStatus("Saved!");
+        refreshFacilityInfo(); // Refresh facility info after successful save
       } else {
         setSaveStatus("Failed to save");
       }
@@ -365,15 +395,43 @@ export default function SettingsPage() {
     try {
       const formData = new FormData();
       formData.append('logo', file);
+      formData.append('userId', user?.id || '');
+      
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/logo`, {
         method: 'POST',
         body: formData,
       });
+      
       if (!res.ok) {
         throw new Error('Upload failed');
       }
+      
       const data = await res.json();
-      setFacilityInfo(prev => ({ ...prev, logoUrl: data.logoUrl }));
+      
+      // Update facility info with new logo URL
+      setFacilityInfo(prev => ({ 
+        ...prev, 
+        logoUrl: data.logoUrl,
+        logoFile: null,
+        logoPreview: null
+      }));
+      
+      // Also update the facility info in the backend
+      if (data.facility) {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility`, {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json", 
+            'Authorization': `Bearer ${authClient.getToken()}` 
+          },
+          body: JSON.stringify({
+            ...facilityInfo,
+            logoUrl: data.logoUrl
+          }),
+        });
+      }
+      
+      setLogoError(null);
     } catch (error) {
       console.error('Logo upload error:', error);
       setLogoError('Image upload failed. Please try again.');
@@ -568,7 +626,16 @@ export default function SettingsPage() {
                   />
                 </div>
 
-                <Button onClick={handleSave}>{isLoading ? "Updating..." : "Save Changes"}</Button>
+                <div className="flex gap-2">
+                  <Button onClick={handleSave}>{isLoading ? "Updating..." : "Save Changes"}</Button>
+                  <Button 
+                    onClick={refreshFacilityInfo} 
+                    variant="outline"
+                    type="button"
+                  >
+                    Refresh
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -650,6 +717,9 @@ export default function SettingsPage() {
           {/* Flat Payment Invite System */}
           <TabsContent value="invites">
             <div className="space-y-6">
+              {/* Invite Usage Statistics */}
+              <InviteUsageStats />
+              
               {/* Available Packages */}
               <Card>
                 <CardHeader>

@@ -15,6 +15,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Users, Plus, Mail, Phone, Calendar, Edit, Trash2, Loader2, PhoneCall, Loader2Icon } from "lucide-react"
 import { usePatients } from "@/hooks/usePatients"
 import { toast } from "sonner"
+import { SmartInviteButton } from "@/components/SmartInviteButton"
+import { InviteUsageStats } from "@/components/InviteUsageStats"
 
 export default function PatientManagement() {
 
@@ -198,10 +200,14 @@ export default function PatientManagement() {
           </div>
           <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <Plus className="w-4 h-4" />
+              <SmartInviteButton 
+                onInvite={() => setIsInviteDialogOpen(true)}
+                onUpgrade={() => window.location.href = '/dashboard/settings'}
+                className="flex items-center gap-2"
+              >
+                {/* <Plus className="w-4 h-4" /> */}
                 Invite Patient
-              </Button>
+              </SmartInviteButton>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px]">
               <DialogHeader>
@@ -416,6 +422,11 @@ export default function PatientManagement() {
           </Card>
         </div>
 
+        {/* Invite Usage Statistics */}
+        {/* <div className="mb-8">
+          <InviteUsageStats />
+        </div> */}
+
         {/* Error Display */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -439,10 +450,10 @@ export default function PatientManagement() {
                 <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No patients yet</h3>
                 <p className="text-gray-600 mb-4">Start by inviting your first patient to join CalmPath.</p>
-                <Button onClick={() => setIsInviteDialogOpen(true)}>
+                {/* <Button onClick={() => setIsInviteDialogOpen(true)}>
                   <Plus className="w-4 h-4 mr-2" />
                   Invite Patient
-                </Button>
+                </Button> */}
               </div>
             ) : (
               <Table>

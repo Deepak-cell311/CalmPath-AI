@@ -52,8 +52,9 @@ interface Reminder {
 
 export default function FamilyDashboard() {
     const loading = useAuthRedirect();
-    // if (loading) return <div>Loading...</div>;
+    console.log("FamilyDashboard: Component rendered, loading state:", loading);
 
+    // All hooks must be called at the top level, before any conditional returns
     const [photos, setPhotos] = useState<MemoryPhoto[]>([])
     const [patientId, setPatientId] = useState<number>(1); // Set default patient ID to 1
     const [isLoading, setIsLoading] = useState(false);
@@ -101,10 +102,20 @@ export default function FamilyDashboard() {
     const [userUsedInviteCode, setUserUsedInviteCode] = useState(false)
     const router = useRouter()
     const [notifiedReminders, setNotifiedReminders] = useState<number[]>([]);
-    const [notificationList, setNotificationList] = useState<{id: number, message: string, time: string, seen: boolean}[]>([]);
+    const [notificationList, setNotificationList] = useState<{ id: number, message: string, time: string, seen: boolean }[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
 
-    
+    // New state variables for payment status tracking
+    const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
+    const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null);
+    const [isLoadingPaymentStatus, setIsLoadingPaymentStatus] = useState(false);
+    const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+
+
+    useEffect(() => {
+        fetchExistingPhotos();
+        fetchUserInviteStatus();
+    }, []);
 
     const fetchExistingPhotos = async () => {
         try {
@@ -130,10 +141,7 @@ export default function FamilyDashboard() {
         }
     };
 
-    useEffect(() => {
-        fetchExistingPhotos();
-        fetchUserInviteStatus();
-    }, []);
+
 
     const fetchUserInviteStatus = async () => {
         try {
@@ -142,18 +150,25 @@ export default function FamilyDashboard() {
                 console.error("No auth token found");
                 return;
             }
-            
+
+            console.log("Family Dashboard: Fetching user invite status with token:", token.substring(0, 20) + "...");
+
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user-token`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 }
             });
-            
+
+            console.log("Family Dashboard: User token response status:", response.status);
+
             if (response.ok) {
                 const userData = await response.json();
+                console.log("Family Dashboard: User data received:", userData);
                 setUser(userData);
                 setUserUsedInviteCode(userData.usedInviteCode || false);
+            } else {
+                console.error("Family Dashboard: Failed to fetch user data:", response.status, response.statusText);
             }
         } catch (error) {
             console.error("Error fetching user invite status:", error);
@@ -163,7 +178,7 @@ export default function FamilyDashboard() {
     useEffect(() => {
         if (!patientId) return;
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/medications`, {
-            credentials: "include" 
+            credentials: "include"
         })
             .then((res) => res.json())
             .then((data) => {
@@ -188,6 +203,93 @@ export default function FamilyDashboard() {
             console.error("Error fetching facility billing:", error);
         }
     };
+
+    // Fetch user's payment/subscription status
+    const fetchPaymentStatus = async () => {
+        if (!user?.id) {
+            console.log("fetchPaymentStatus: No user ID available");
+            return;
+        }
+
+        console.log("fetchPaymentStatus: Starting for user:", user.id);
+        setIsLoadingPaymentStatus(true);
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                console.log("fetchPaymentStatus: No auth token found");
+                return;
+            }
+
+            console.log("fetchPaymentStatus: Making API call to /api/billing/subscription");
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/billing/subscription`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log("fetchPaymentStatus: Response status:", response.status);
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log("fetchPaymentStatus: Success response:", data);
+                setSubscriptionStatus(data.subscription.status || "inactive");
+                setSubscriptionDetails(data.subscription);
+            } else if (response.status === 404) {
+                console.log("fetchPaymentStatus: 404 - No subscription found, checking invite code");
+                // No subscription found, check if user has used invite code
+                // If user used invite code, they are considered a "paid user" through facility
+                if (userUsedInviteCode) {
+                    console.log("fetchPaymentStatus: Setting status to invite_access");
+                    setSubscriptionStatus("invite_access");
+                } else {
+                    console.log("fetchPaymentStatus: Setting status to inactive");
+                    setSubscriptionStatus("inactive");
+                }
+                // Clear subscription details since there's no active subscription
+                setSubscriptionDetails(null);
+            } else {
+                // Handle other error statuses
+                console.error("fetchPaymentStatus: Error status:", response.status);
+                setSubscriptionStatus("error");
+                setSubscriptionDetails(null);
+            }
+        } catch (error) {
+            console.error("fetchPaymentStatus: Exception occurred:", error);
+            setSubscriptionStatus("error");
+            setSubscriptionDetails(null);
+        } finally {
+            setIsLoadingPaymentStatus(false);
+        }
+    };
+
+    // Fetch invite usage statistics for the facility
+    // const fetchInviteUsageStats = async () => {
+    //     if (!user?.facilityId) return;
+
+    //     try {
+    //         const token = localStorage.getItem('authToken');
+    //         if (!token) return;
+
+    //         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/facility/invite-limits`, {
+    //             headers: {
+    //                 'Authorization': `Bearer ${token}`,
+    //                 'Content-Type': 'application/json'
+    //             }
+    //         });
+
+    //         if (response.ok) {
+    //             const data = await response.json();
+    //             // setInviteUsageStats({ // This state was removed, so this line is removed
+    //             //     totalInvites: data.totalInvites || 0,
+    //             //     usedInvites: data.usedInvites || 0,
+    //             //     availableInvites: data.availableInvites || 0
+    //             // });
+    //         }
+    //     } catch (error) {
+    //         console.error("Error fetching invite usage stats:", error);
+    //     }
+    // };
 
     useEffect(() => {
         fetchFacilityBilling();
@@ -347,6 +449,11 @@ export default function FamilyDashboard() {
         }
     };
 
+    useEffect(() => {
+        if (patientId) {
+            fetchReminders();
+        }
+    }, [patientId]);
 
 
 
@@ -426,6 +533,7 @@ export default function FamilyDashboard() {
 
     const handleStartSubscription = async () => {
         setIsLoading(true);
+        setIsPaymentProcessing(true);
         try {
             // Check if Stripe key is available
             const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -458,9 +566,9 @@ export default function FamilyDashboard() {
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${localStorage.getItem("authToken")}` },
                 body: JSON.stringify({
                     priceId: priceId,
-                    customerEmail: "user@example.com", // Replace with actual user email
+                    customerEmail: user?.email || "user@example.com", // Use actual user email
                     metadata: {
-                        facilityId: "1", // Replace with actual facility ID
+                        facilityId: user?.facilityId || "1", // Use actual facility ID
                     },
                     couponId: discountAmount ? facilityStripePriceId : undefined, // Apply coupon if discount available
                     credentials: "include"
@@ -474,7 +582,21 @@ export default function FamilyDashboard() {
 
             const data = await res.json();
             if (data.url) {
-                window.location.href = data.url;
+                // Store subscription intent for status refresh
+                localStorage.setItem('subscriptionIntent', 'pending');
+
+                // Store the session ID for debugging
+                if (data.sessionId) {
+                    localStorage.setItem('stripeSessionId', data.sessionId);
+                    console.log('Stripe session ID stored:', data.sessionId);
+                }
+
+                // Add success and cancel URLs to the checkout session
+                const checkoutUrl = new URL(data.url);
+                checkoutUrl.searchParams.set('success_url', `${window.location.origin}/family-dashboard?checkout_status=success`);
+                checkoutUrl.searchParams.set('cancel_url', `${window.location.origin}/family-dashboard?checkout_status=cancel`);
+
+                window.location.href = checkoutUrl.toString();
             } else {
                 throw new Error("No checkout URL received");
             }
@@ -483,6 +605,7 @@ export default function FamilyDashboard() {
             alert("Failed to start subscription: " + error.message);
         } finally {
             setIsLoading(false);
+            setIsPaymentProcessing(false);
         }
     }
 
@@ -509,6 +632,11 @@ export default function FamilyDashboard() {
                 setPromoCodeStatus("Access Granted!");
                 setDiscountAmount(100);
                 setDiscountType("percent");
+                // Refresh payment status after successful promo code application
+                setTimeout(() => {
+                    fetchPaymentStatus();
+                    // fetchInviteUsageStats(); // This line was removed
+                }, 1000);
                 return;
             }
 
@@ -526,6 +654,11 @@ export default function FamilyDashboard() {
                 setPromoCodeStatus("Access Granted!");
                 setDiscountAmount(data.discount);
                 setDiscountType(data.type);
+                // Refresh payment status after successful promo code application
+                setTimeout(() => {
+                    fetchPaymentStatus();
+                    // fetchInviteUsageStats(); // This line was removed
+                }, 1000);
             } else {
                 setPromoCodeStatus(data.message || "Invalid promo code.");
             }
@@ -549,11 +682,6 @@ export default function FamilyDashboard() {
     }
 
 
-    useEffect(() => {
-        if (patientId) {
-            fetchReminders();
-        }
-    }, [patientId]);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -578,6 +706,221 @@ export default function FamilyDashboard() {
         }, 1000);
         return () => clearInterval(interval);
     }, [reminders, notifiedReminders]);
+
+    // New useEffect for fetching payment status and invite usage
+    useEffect(() => {
+        if (user?.id && user?.email) {
+            console.log("Fetching payment status for user:", user.id);
+            fetchPaymentStatus();
+            // fetchInviteUsageStats(); // This line was removed
+        }
+    }, [user?.id, user?.email]);
+
+    // Check for pending subscription status with polling
+    useEffect(() => {
+        const subscriptionIntent = localStorage.getItem('subscriptionIntent');
+        if (subscriptionIntent === 'pending' && user?.id) {
+            setIsPaymentProcessing(true);
+
+            // Poll for payment status updates
+            const pollInterval = setInterval(async () => {
+                await fetchPaymentStatus();
+
+                // If we get an active status, stop polling
+                if (subscriptionStatus === 'active') {
+                    localStorage.removeItem('subscriptionIntent');
+                    setIsPaymentProcessing(false);
+                    clearInterval(pollInterval);
+                }
+            }, 2000); // Check every 2 seconds
+
+            // Stop polling after 30 seconds (15 attempts)
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                localStorage.removeItem('subscriptionIntent');
+                setIsPaymentProcessing(false);
+            }, 30000);
+
+            return () => clearInterval(pollInterval);
+        }
+    }, [user?.id, subscriptionStatus]);
+
+    // Check URL parameters for Stripe checkout return
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('session_id');
+        const checkoutStatus = urlParams.get('checkout_status');
+
+        if (sessionId || checkoutStatus) {
+            if (checkoutStatus === 'success') {
+                // Success - refresh payment status and show success message
+                localStorage.setItem('subscriptionIntent', 'pending');
+                setIsPaymentProcessing(true);
+                setTimeout(() => {
+                    fetchPaymentStatus();
+                }, 2000);
+
+                // Show success notification
+                alert('Payment successful! Your subscription is being activated.');
+            } else if (checkoutStatus === 'cancel') {
+                // Cancelled - clear any pending status
+                localStorage.removeItem('subscriptionIntent');
+                setIsPaymentProcessing(false);
+                alert('Payment was cancelled. You can try again anytime.');
+            }
+
+            // Clean up URL parameters
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }, [user?.id]);
+
+
+    // Loading check must come after all hooks are called
+    if (loading) return <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+        </div>
+    </div>;
+
+    // Handle subscription management
+    const handleManageSubscription = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) return;
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/billing/portal-session`, {
+                method: "POST",
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                }
+            } else {
+                alert("Failed to open billing portal. Please try again.");
+            }
+        } catch (error) {
+            console.error("Error opening billing portal:", error);
+            alert("Failed to open billing portal. Please try again.");
+        }
+    };
+
+    // Manual subscription activation function (for when webhooks fail)
+    const handleManualActivation = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                alert("No auth token found");
+                return;
+            }
+
+            // Get the session ID from localStorage (set during checkout)
+            const storedSessionId = localStorage.getItem('stripeSessionId');
+
+            if (!storedSessionId) {
+                alert("No Stripe session ID found. Please try subscribing again.");
+                return;
+            }
+
+            console.log('Manual activation for session:', storedSessionId, 'user:', user?.id);
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/billing/manual-activate`, {
+                method: "POST",
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: storedSessionId,
+                    userId: user?.id
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Subscription activated successfully! ${data.message}`);
+                // Clear the stored session ID
+                localStorage.removeItem('stripeSessionId');
+                localStorage.removeItem('subscriptionIntent');
+                // Refresh payment status
+                setTimeout(() => {
+                    fetchPaymentStatus();
+                }, 1000);
+            } else {
+                const errorData = await response.json();
+                alert(`Manual activation failed: ${errorData.message}`);
+            }
+        } catch (error) {
+            console.error("Error in manual activation:", error);
+            alert("Failed to activate subscription. Check console for details.");
+        }
+    };
+
+    // Manual webhook test function for debugging
+    const handleTestWebhook = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                alert("No auth token found");
+                return;
+            }
+
+            // Get the session ID from localStorage (set during checkout)
+            const storedSessionId = localStorage.getItem('stripeSessionId');
+            const subscriptionIntent = localStorage.getItem('subscriptionIntent');
+
+            if (!subscriptionIntent || subscriptionIntent !== 'pending') {
+                alert("No pending subscription found. Please try subscribing again.");
+                return;
+            }
+
+            let sessionId = storedSessionId;
+
+            // If no stored session ID, prompt user to enter it
+            if (!sessionId) {
+                sessionId = prompt("Enter the Stripe session ID from your payment confirmation email:");
+                if (!sessionId) return;
+            } else {
+                console.log('Using stored session ID:', sessionId);
+            }
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/billing/test-subscription-webhook`, {
+                method: "POST",
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    sessionId: sessionId,
+                    userId: user?.id
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Webhook test successful! ${data.message}`);
+                // Clear the pending status
+                localStorage.removeItem('subscriptionIntent');
+                localStorage.removeItem('stripeSessionId');
+                // Refresh payment status
+                setTimeout(() => {
+                    fetchPaymentStatus();
+                }, 1000);
+            } else {
+                const errorData = await response.json();
+                alert(`Webhook test failed: ${errorData.message}`);
+            }
+        } catch (error) {
+            console.error("Error testing webhook:", error);
+            alert("Failed to test webhook. Check console for details.");
+        }
+    };
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -1002,10 +1345,10 @@ export default function FamilyDashboard() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="billing" className="space-y-6 max-w-lg mx-auto">
+                        <TabsContent value="billing" className="max-w-6xl mx-auto">
                             <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
+                                <CardHeader className="text-center">
+                                    <CardTitle className="flex items-center justify-center gap-2">
                                         <CreditCard className="w-5 h-5" />
                                         Subscription Access
                                     </CardTitle>
@@ -1013,69 +1356,281 @@ export default function FamilyDashboard() {
                                         Subscribe to unlock full access, or enter a promo code if your facility has provided one.
                                     </CardDescription>
                                 </CardHeader>
-                                <CardContent className="space-y-6">
-                                    {/* Payment Option */}
-                                    <div className="space-y-2">
-                                        <h3 className="font-semibold">Pay & Subscribe</h3>
-                                        {userUsedInviteCode ? (
-                                            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                                                <div className="flex items-center gap-2 text-green-700">
-                                                    <CreditCard className="w-4 h-4" />
-                                                    <span className="font-medium">Free Access Granted</span>
+                                <CardContent>
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        {/* Left Side - Info Section */}
+                                        <div className="space-y-6">
+                                            <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Your Account Info</h3>
+
+                                            {/* Access Summary */}
+                                            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                                                <div className="space-y-3">
+                                                    <div className="inline-block justify-end">
+                                                        <div
+                                                            className={`px-3 py-1 rounded-full text-xs font-medium ${subscriptionStatus === "active" || subscriptionStatus === "invite_access"
+                                                                ? "bg-green-100 text-green-800"
+                                                                : "bg-red-100 text-red-800"
+                                                                }`}
+                                                        >
+                                                            {subscriptionStatus === "active" || subscriptionStatus === "invite_access" ? "PAID" : "UNPAID"}
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-4">
+                                                        <h4 className="font-semibold text-blue-900">Your Access Status</h4>
+                                                        <p className="text-sm text-blue-700">
+                                                            {subscriptionStatus === "active"
+                                                                ? "Full access with your subscription"
+                                                                : subscriptionStatus === "invite_access"
+                                                                    ? "Full access via facility invite (paid through facility)"
+                                                                    : "Limited access - subscription or invite required"}
+                                                        </p>
+                                                    </div>
+
                                                 </div>
-                                                <p className="text-sm text-green-600 mt-1">
-                                                    You have free access to this facility through your invite code.
-                                                </p>
+                                                {user?.facilityId && (
+                                                    <div className="mt-2 text-xs text-blue-600">Connected to Facility: {user.facilityId}</div>
+                                                )}
+                                                {subscriptionStatus === "invite_access" && (
+                                                    <div className="mt-2 text-xs text-green-600">✓ Access granted through facility invite system</div>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <>
-                                                <p className="text-gray-600 mb-2">
-                                                    Monthly price:
-                                                    {discountAmount && discountType ? (
-                                                        <span className="font-medium text-green-600">
-                                                            $
-                                                            {discountType === "percent"
-                                                                ? (Number(facilityMonthlyPrice) * (1 - Number(discountAmount) / 100)).toFixed(2)
-                                                                : Math.max(Number(facilityMonthlyPrice) - Number(discountAmount), 0).toFixed(2)}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="font-medium text-primary">${facilityMonthlyPrice}</span>
+
+                                            {/* Payment Status Display */}
+                                            <div className="space-y-3">
+                                                <div className="space-y-2">
+                                                    <h4 className="font-semibold">Payment Details</h4>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            console.log("Manual refresh clicked");
+                                                            console.log("Current user:", user);
+                                                            console.log("Current subscriptionStatus:", subscriptionStatus);
+                                                            console.log("Current userUsedInviteCode:", userUsedInviteCode);
+                                                            fetchPaymentStatus()
+                                                        }}
+                                                        disabled={isLoadingPaymentStatus}
+                                                        className="w-full"
+                                                    >
+                                                        Refresh Payment Status
+                                                    </Button>
+                                                </div>
+
+
+                                                {isLoadingPaymentStatus ? (
+                                                    <div className="flex flex-col items-center gap-2 text-gray-600">
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                                        <span>Loading payment status...</span>
+                                                    </div>
+                                                ) : isPaymentProcessing ? (
+                                                    <div className="flex flex-col items-center gap-2 text-blue-600">
+                                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                                        <span>Payment processing...</span>
+                                                        <p className="text-xs text-gray-500">Please wait while we activate your subscription</p>
+                                                    </div>
+                                                ) : (
+                                                    <div
+                                                        className={`p-4 rounded-lg border ${subscriptionStatus === "active" || subscriptionStatus === "invite_access"
+                                                            ? "bg-green-50 border-green-200"
+                                                            : "bg-red-50 border-red-200"
+                                                            }`}
+                                                    >
+                                                        <div className="flex flex-col gap-2">
+                                                            <span
+                                                                className={`font-medium flex items-center gap-2 ${subscriptionStatus === "active" || subscriptionStatus === "invite_access"
+                                                                    ? "text-green-700"
+                                                                    : "text-red-700"
+                                                                    }`}
+                                                            >
+                                                                <CreditCard
+                                                                    className={`w-4 h-4 ${subscriptionStatus === "active" || subscriptionStatus === "invite_access"
+                                                                        ? "text-green-600"
+                                                                        : "text-red-600"
+                                                                        }`}
+                                                                />
+
+                                                                {subscriptionStatus === "active"
+                                                                    ? "Paid - Your Subscription"
+                                                                    : subscriptionStatus === "invite_access"
+                                                                        ? "Paid - Facility Invite Access"
+                                                                        : subscriptionStatus === "inactive"
+                                                                            ? "Unpaid - No Access"
+                                                                            : "Payment Status Unknown"}
+                                                            </span>
+                                                        </div>
+                                                        {subscriptionStatus === "active" && subscriptionDetails && (
+                                                            <div className="mt-2 text-sm text-green-600">
+                                                                <p>Status: {subscriptionDetails.status}</p>
+                                                            </div>
+                                                        )}
+                                                        {subscriptionStatus === "invite_access" && (
+                                                            <div className="mt-2 text-sm text-green-600 text-center">
+                                                                <p>✓ Access granted through facility invite system</p>
+                                                                <p>✓ You are counted as a paid user for this facility</p>
+                                                                <p>✓ No additional payment required from you</p>
+                                                            </div>
+                                                        )}
+                                                        {subscriptionStatus === "inactive" && (
+                                                            <div className="mt-2 text-sm text-red-600 text-center">
+                                                                <p>No active subscription or invite access</p>
+                                                                <p>Subscribe on the right or ask facility for an invite code</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Information Note */}
+                                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                                                <h4 className="font-medium text-gray-900 mb-2">How the Access System Works</h4>
+                                                <div className="text-sm text-gray-600 space-y-2">
+                                                    <div>
+                                                        <p>
+                                                            <strong>Individual Subscription:</strong>
+                                                        </p>
+                                                        <p>You pay monthly for your own access to the platform</p>
+                                                    </div>
+                                                    <div>
+                                                        <p>
+                                                            <strong>Facility Invite:</strong>
+                                                        </p>
+                                                        <p>Your facility can invite you for free access (they pay for you)</p>
+                                                    </div>
+                                                    <div>
+                                                        <p>
+                                                            <strong>Payment Status:</strong>
+                                                        </p>
+                                                        <p>Both methods count you as a "paid user" for the facility</p>
+                                                    </div>
+                                                    <div>
+                                                        <p>
+                                                            <strong>No Invite Sending:</strong>
+                                                        </p>
+                                                        <p>Family members cannot send invites to others</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Right Side - Subscription Section */}
+                                        <div className="space-y-6">
+                                            <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Get Access</h3>
+
+                                            {subscriptionStatus === "active" ? (
+                                                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                                    <div className="flex items-center gap-2">
+                                                        <CreditCard className="w-4 h-4 text-green-700" />
+                                                        <span className="font-medium text-green-700">Your Active Subscription</span>
+                                                    </div>
+                                                    <p className="text-sm text-green-600 mt-1">
+                                                        You have an active subscription. Manage your billing through your account.
+                                                    </p>
+                                                    {subscriptionDetails && (
+                                                        <div className="mt-2 text-xs text-green-600 ">
+                                                        </div>
                                                     )}
-                                                </p>
-                                                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                                    onClick={handleStartSubscription}
-                                                    disabled={isLoading}
-                                                >
-                                                    <CreditCard className="w-4 h-4 mr-2" />
-                                                    {isLoading ? "Processing..." : "Subscribe"}
-                                                </Button>
-                                            </>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center justify-center my-4">
-                                        <span className="text-gray-400 text-xs uppercase">or</span>
-                                    </div>
-                                    {/* Promo Code Option */}
-                                    {!userUsedInviteCode && (
-                                        <div className="space-y-2">
-                                            <h3 className="font-semibold">Have a Promo Code?</h3>
-                                            <Input
-                                                id="promoCode"
-                                                value={userPromoCode}
-                                                onChange={e => setUserPromoCode(e.target.value)}
-                                                placeholder="Enter promo code"
-                                                maxLength={24}
-                                            />
-                                            <Button className="w-full mt-2" variant="outline" onClick={handleApplyPromoCode}>
-                                                Apply Promo Code
-                                            </Button>
-                                            {promoCodeStatus && (
-                                                <p className="text-sm mt-2" style={{ color: promoCodeStatus === "Access Granted!" ? "green" : "red" }}>
-                                                    {promoCodeStatus}
-                                                </p>
+                                                    <div className="mt-3 flex">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={handleManageSubscription}
+                                                            className="text-white border-primary hover:bg-green-100 bg-primary"
+                                                        >
+                                                            Manage Subscription
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : userUsedInviteCode ? (
+                                                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                                    <div className="flex flex-col items-center gap-2 text-center">
+                                                        <CreditCard className="w-4 h-4 text-green-700" />
+                                                        <span className="font-medium text-green-700">Access via Facility Invite</span>
+                                                    </div>
+                                                    <p className="text-sm text-green-600 mt-1 text-center">
+                                                        You have access through a facility invite code. No payment required from you.
+                                                    </p>
+                                                    <div className="mt-2 text-xs text-green-600 text-center">
+                                                        <p>✓ Invite code used: {user?.usedInviteCode ? "Yes" : "No"}</p>
+                                                        <p>✓ Access granted by facility</p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                                        <h4 className="font-medium text-blue-900 mb-3">Two ways to get access:</h4>
+                                                        <div className="space-y-4">
+                                                            <div className="p-3 bg-white rounded-lg border border-blue-100">
+                                                                <div className="flex items-start gap-3">
+                                                                    <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
+                                                                        1
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-medium text-blue-900">Subscribe Individually</p>
+                                                                        <p className="text-sm text-blue-700">Pay monthly for your own access</p>
+                                                                        <p className="text-sm text-blue-600 font-semibold">
+                                                                            Price: ${facilityMonthlyPrice}/month
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-3 bg-white rounded-lg border border-green-100">
+                                                                <div className="flex items-start gap-3">
+                                                                    <div className="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
+                                                                        2
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-medium text-green-900">Get Facility Invite</p>
+                                                                        <p className="text-sm text-green-700">Ask your facility for an invite code</p>
+                                                                        <p className="text-sm text-green-600 font-semibold">Free access through facility</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <Button
+                                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                                        onClick={handleStartSubscription}
+                                                        disabled={isLoading}
+                                                    >
+                                                        <CreditCard className="w-4 h-4 mr-2" />
+                                                        {isLoading ? "Processing..." : "Subscribe Now"}
+                                                    </Button>
+                                                </>
+                                            )}
+
+                                            {subscriptionStatus === "inactive" && <div className="flex items-center justify-center my-4">
+                                                <span className="text-gray-400 text-xs uppercase">or</span>
+                                            </div>}
+
+                                            {/* Promo Code Option */}
+                                            {subscriptionStatus !== "active" && !userUsedInviteCode && (
+                                                <div className="space-y-3">
+                                                    <h4 className="font-semibold">Have a Discount Code?</h4>
+                                                    <p className="text-xs text-gray-600">
+                                                        Enter a facility discount code to get reduced pricing on your subscription
+                                                    </p>
+                                                    <Input
+                                                        id="promoCode"
+                                                        value={userPromoCode}
+                                                        onChange={(e) => setUserPromoCode(e.target.value)}
+                                                        placeholder="Enter discount code"
+                                                        maxLength={24}
+                                                    />
+                                                    <Button className="w-full bg-transparent" variant="outline" onClick={handleApplyPromoCode}>
+                                                        Apply Discount Code
+                                                    </Button>
+                                                    {promoCodeStatus && (
+                                                        <p
+                                                            className="text-sm mt-2"
+                                                            style={{ color: promoCodeStatus === "Access Granted!" ? "green" : "red" }}
+                                                        >
+                                                            {promoCodeStatus}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
-                                    )}
+                                    </div>
                                 </CardContent>
                             </Card>
                         </TabsContent>

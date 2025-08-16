@@ -42,10 +42,15 @@ export default function LoginPage() {
     setError(null)
 
     try {
+      console.log("Login attempt:", { email, userType, inviteCode: inviteCode.trim() || undefined })
+      
       await login(email, password, userType, inviteCode.trim() || undefined)
+
+      console.log("Login successful, user type:", userType)
 
       // If family member logs in, show options
       if (userType === "Family Member") {
+        console.log("Family member login, showing dashboard options")
         setFamilyLoginData({ email, password, inviteCode: inviteCode.trim() || undefined })
         setShowFamilyOptions(true)
         setIsLoading(false)
@@ -54,6 +59,7 @@ export default function LoginPage() {
 
       // Navigate based on account type
       if (userType === "Facility Staff") {
+        console.log("Redirecting to facility dashboard")
         router.push("/dashboard")
       }
     } catch (err: any) {
@@ -67,22 +73,25 @@ export default function LoginPage() {
   const handleFamilyMemberLogin = async (loginAs: "family" | "patient") => {
     if (!familyLoginData) return
 
+    console.log("Family member dashboard selection:", loginAs)
     setIsLoading(true)
     setError(null)
 
     try {
+      // Don't call login again - just redirect based on the selection
+      // The user is already authenticated from the first login
       if (loginAs === "family") {
-        // Login as family member - go to family dashboard
-        await login(familyLoginData.email, familyLoginData.password, "Family Member", familyLoginData.inviteCode)
+        console.log("Redirecting to family dashboard")
+        // Go directly to family dashboard
         router.push("/family-dashboard")
       } else {
-        // Login as patient - go to main page
-        await login(familyLoginData.email, familyLoginData.password, "Patient", familyLoginData.inviteCode)
+        console.log("Redirecting to main page (patient view)")
+        // Go directly to main page (patient view)
         router.push("/main")
       }
     } catch (err: any) {
-      console.error("Login error:", err)
-      setError(err.message || "Login failed. Please try again.")
+      console.error("Navigation error:", err)
+      setError("Navigation failed. Please try again.")
     } finally {
       setIsLoading(false)
       setShowFamilyOptions(false)
@@ -171,10 +180,10 @@ export default function LoginPage() {
             </Card>
 
             {/* Patient Access */}
-          <Card className="border-2 border-transparent hover:border-emerald-200 transition-all duration-200 hover:shadow-lg group cursor-pointer">
+                      <Card className="border-2 border-transparent hover:border-emerald-200 transition-all duration-200 hover:shadow-lg group cursor-pointer">
             <CardContent className="p-6">
               <Button
-                onClick={() => handleFamilyMemberLogin("main")}
+                onClick={() => handleFamilyMemberLogin("patient")}
                 className="w-full h-auto p-0 bg-transparent hover:bg-transparent text-left group-hover:scale-[1.02] transition-transform"
                 disabled={isLoading}
                 variant="ghost"
