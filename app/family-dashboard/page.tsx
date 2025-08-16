@@ -1471,7 +1471,7 @@ export default function FamilyDashboard() {
                                                             </div>
                                                         )}
                                                         {subscriptionStatus === "inactive" && (
-                                                            <div className="mt-2 text-sm text-red-600 text-center">
+                                                            <div className="mt-2 text-sm text-red-600">
                                                                 <p>No active subscription or invite access</p>
                                                                 <p>Subscribe on the right or ask facility for an invite code</p>
                                                             </div>
@@ -1529,16 +1529,6 @@ export default function FamilyDashboard() {
                                                         <div className="mt-2 text-xs text-green-600 ">
                                                         </div>
                                                     )}
-                                                    <div className="mt-3 flex">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={handleManageSubscription}
-                                                            className="text-white border-primary hover:bg-green-100 bg-primary"
-                                                        >
-                                                            Manage Subscription
-                                                        </Button>
-                                                    </div>
                                                 </div>
                                             ) : userUsedInviteCode ? (
                                                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">

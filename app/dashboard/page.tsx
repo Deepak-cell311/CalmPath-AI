@@ -27,12 +27,14 @@ export default function FacilityDashboard() {
   const fetchDashboardData = async () => {
     setIsLoading(true); // Start loading
     try {
-      // Build the patients API URL with proper filtering
-      let patientsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/patients`;
+      // Use different endpoints based on user type
+      let patientsUrl;
       if (user?.accountType === "Facility Staff" && user?.facilityId) {
-        patientsUrl += `?facilityId=${user.facilityId}`;
-      } else if (user?.id) {
-        patientsUrl += `?userId=${user.id}`;
+        // For facility staff, get all members (patients + invited family members)
+        patientsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/facility/members?facilityId=${user.facilityId}`;
+      } else {
+        // For individual users, get their patients
+        patientsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/patients?userId=${user?.id}`;
       }
 
       const [patientsRes, statusRes] = await Promise.all([
@@ -52,7 +54,7 @@ export default function FacilityDashboard() {
 
       const active = statusData.find((d: any) => d.status === "ok" || d.status === "good");
 
-      // For facility staff, patients are already filtered by facilityId
+      // For facility staff, data is already filtered by facility
       // For individual users, filter by userId
       let filtered = patientsData;
       if (user?.accountType !== "Facility Staff") {
@@ -95,12 +97,14 @@ export default function FacilityDashboard() {
   useEffect(() => {
     if (!loading && user) {
       setIsLoading(true);
-      // Build the patients API URL with proper filtering
-      let patientsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/patients`;
+      // Use different endpoints based on user type
+      let patientsUrl;
       if (user.accountType === "Facility Staff" && user.facilityId) {
-        patientsUrl += `?facilityId=${user.facilityId}`;
+        // For facility staff, get all members (patients + invited family members)
+        patientsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/facility/members?facilityId=${user.facilityId}`;
       } else {
-        patientsUrl += `?userId=${user.id}`;
+        // For individual users, get their patients
+        patientsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/patients?userId=${user.id}`;
       }
 
       Promise.all([
@@ -112,7 +116,7 @@ export default function FacilityDashboard() {
         }).then(res => res.json())
       ])
         .then(([patientsData, statusData]) => {
-          // For facility staff, patients are already filtered by facilityId
+          // For facility staff, data is already filtered by facility
           // For individual users, filter by userId
           let filtered = patientsData;
           if (user.accountType !== "Facility Staff") {
@@ -237,6 +241,7 @@ export default function FacilityDashboard() {
                   <thead>
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Room</th>
                     </tr>
@@ -244,13 +249,22 @@ export default function FacilityDashboard() {
                   <tbody>
                     {isLoading ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-2 text-center">
+                        <td colSpan={4} className="px-4 py-2 text-center">
                           <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
                         </td>
                       </tr>
                     ) : filteredPatients.map((p) => (
                       <tr key={p.id}>
                         <td className="px-4 py-2 whitespace-nowrap">{p.firstName} {p.lastName}</td>
+                        <td className="px-4 py-2 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            p.type === 'family_member' 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {p.type === 'family_member' ? 'Family Member' : 'Patient'}
+                          </span>
+                        </td>
                         <td className="px-4 py-2 whitespace-nowrap">{p.status}</td>
                         <td className="px-4 py-2 whitespace-nowrap">{p.roomNumber || '-'}</td>
                       </tr>
