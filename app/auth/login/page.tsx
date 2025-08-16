@@ -287,7 +287,7 @@ export default function LoginPage() {
                     />
                   </div>
 
-                  <div className="space-y-2">
+                  {/* <div className="space-y-2">
                     <Label htmlFor="inviteCode" className="flex items-center gap-2">
                       <Gift className="w-4 h-4" />
                       Invite Code (Optional)
@@ -302,7 +302,7 @@ export default function LoginPage() {
                     <p className="text-xs text-gray-500">
                       If you have an invite code, enter it here to get free access to the facility.
                     </p>
-                  </div>
+                  </div> */}
 
                   {error && (
                     <div className="text-red-500 text-sm">{error}</div>
