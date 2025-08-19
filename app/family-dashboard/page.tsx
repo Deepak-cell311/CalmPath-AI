@@ -121,7 +121,7 @@ export default function FamilyDashboard() {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos`, {
                 method: "GET",
-                credentials: "include",
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}` },
             });
 
             const result = await response.json();
@@ -352,7 +352,7 @@ export default function FamilyDashboard() {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos`, {
                 method: "POST",
                 body: formData,
-                // credentials: "include", // if using session/cookie auth
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}` },
             });
 
             const result = await response.json();
@@ -368,7 +368,7 @@ export default function FamilyDashboard() {
                         date: new Date().toLocaleDateString(), // Use current date since API doesn't return created_at
                         tags: photo.tags,
                         description: photo.description,
-                        url: photo.file,
+                        url: `${photo.file}?t=${localStorage.getItem('authToken') || ''}`,
                         context: photo.contextAndStory,
                     }
                 ]);
@@ -396,7 +396,7 @@ export default function FamilyDashboard() {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/family/memoryPhotos/${photoId}`, {
                 method: "DELETE",
-                credentials: "include",
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}` },
             });
             if (response.ok) {
                 setPhotos((prev) => prev.filter((photo) => photo.id !== photoId));
@@ -1169,7 +1169,12 @@ export default function FamilyDashboard() {
                                             <Card key={photo.id} className="overflow-hidden">
                                                 <div className="aspect-video bg-gray-100 relative">
                                                     <img
-                                                        src={photo.url || "/placeholder.svg"}
+                                                        src={(() => {
+                                                            const token = (typeof window !== 'undefined' && localStorage.getItem('authToken')) || '';
+                                                            if (!photo.url) return "/placeholder.svg";
+                                                            const separator = photo.url.includes('?') ? '&' : '?';
+                                                            return `${photo.url}${separator}t=${token}`;
+                                                        })()}
                                                         alt={photo.name}
                                                         className="w-full h-full object-cover"
                                                     />
