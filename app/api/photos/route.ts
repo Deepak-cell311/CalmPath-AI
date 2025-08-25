@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     // Get current user to fetch their photos
     let currentUserId = null
     try {
-      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/auth/user-token`, {
+      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/user-token`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -42,7 +42,11 @@ export async function GET(request: NextRequest) {
     // Fetch photos from backend for the current user
     let allPhotos = []
     try {
-      const photosResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/family/memoryPhotos`, {
+      const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+      console.log("DEBUG: Using backend URL:", backendUrl)
+      console.log("DEBUG: NEXT_PUBLIC_API_URL env var:", process.env.NEXT_PUBLIC_API_URL)
+      
+      const photosResponse = await fetch(`${backendUrl}/api/family/memoryPhotos`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -57,7 +61,7 @@ export async function GET(request: NextRequest) {
           let photoUrl = photo.file
           if (photoUrl && !photoUrl.startsWith('http')) {
             // If it's a relative path, construct the full URL
-            photoUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${photoUrl.startsWith('/') ? '' : '/'}${photoUrl}`
+            photoUrl = `${backendUrl}${photoUrl.startsWith('/') ? '' : '/'}${photoUrl}`
           }
           
           // Proxy the image through our frontend API to handle authentication
@@ -152,7 +156,7 @@ export async function POST(request: NextRequest) {
     const photoData = await request.json()
 
     // Upload photo to backend
-    const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/photos`, {
+          const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/photos`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -191,7 +195,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete photo from backend
-    const deleteResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/photos/${id}`, {
+          const deleteResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/photos/${id}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,

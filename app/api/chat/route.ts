@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       const authHeader = request.headers.get('authorization')
       if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.substring(7)
-        const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/auth/user-token`, {
+        const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/auth/user-token`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
