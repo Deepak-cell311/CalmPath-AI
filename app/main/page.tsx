@@ -7,6 +7,7 @@ import { Slider } from "@/components/ui/slider"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { NotificationManager } from "@/components/ui/notification"
+import { PhotoDisplay } from "@/components/ui/photo-display"
 import { useAuthRedirect } from "@/hooks/use-auth-redirect"
 import {
   Heart,
@@ -24,6 +25,8 @@ import {
   Type,
   ChevronLeft,
   ChevronRight,
+  Settings,
+  X,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -42,6 +45,16 @@ interface MemoryPhoto {
   url: string
   context: string
   tags: string[]
+}
+
+interface CurrentUser {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  accountType: string
+  facilityId?: string
+  role?: string
 }
 
 // Extend Window interface for Speech Recognition
@@ -82,9 +95,73 @@ export default function PatientInterface() {
   const recognitionRef = useRef<any>(null)
   const breathingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const [voiceChatMode, setVoiceChatMode] = useState(false)
+  const [patientId, setPatientId] = useState<number | null>(null)
   const lastHeardRef = useRef(Date.now())
   const restartTimeout = useRef<NodeJS.Timeout | null>(null)
   const [speechSynthesisSupported, setSpeechSynthesisSupported] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+  const [showPhotos, setShowPhotos] = useState(false)
+  const [currentPhotos, setCurrentPhotos] = useState<any[]>([])
+
+  // Fetch current user data
+  const fetchCurrentUser = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.log("No auth token found");
+        return;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user-token`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        console.log("Current user fetched:", userData);
+        setCurrentUser(userData);
+      } else {
+        console.log("Failed to fetch current user");
+      }
+    } catch (error) {
+      console.error("Error fetching current user:", error);
+    }
+  }
+
+  // Fetch patient ID for the current user
+  const fetchPatientId = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.log("No auth token found, using default patient ID");
+        setPatientId(1); // Fallback to default
+        return;
+      }
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/patient`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Patient ID fetched:", data.patientId);
+        setPatientId(data.patientId);
+      } else {
+        console.log("Failed to fetch patient ID, using default");
+        setPatientId(1); // Fallback to default
+      }
+    } catch (error) {
+      console.error("Error fetching patient ID:", error);
+      setPatientId(1); // Fallback to default
+    }
+  }
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -92,11 +169,16 @@ export default function PatientInterface() {
     }
   }, [])
 
+  // Fetch current user and patient ID on component mount
+  useEffect(() => {
+    fetchCurrentUser();
+    fetchPatientId();
+  }, [])
+
   const comfortActivities = [
     { name: "Peaceful Music", icon: Music },
     { name: "Breathing", icon: Wind },
     { name: "Memories", icon: Camera },
-    { name: "Peaceful Scene", icon: Waves },
   ]
 
   // Check for Speech Recognition support
@@ -148,14 +230,20 @@ export default function PatientInterface() {
     transcriptRef.current = currentTranscript
   }, [currentTranscript])
 
-  // Auto-timeout: If no new speech in 1.5 seconds, stop listening and process transcript
+  // Monitor volume changes for debugging
+  useEffect(() => {
+    console.log("Volume state updated to:", volume[0])
+  }, [volume])
+
+  // Auto-timeout: If no new speech in 2 seconds, stop listening and process transcript
   useEffect(() => {
     if (isListening) {
       const interval = setInterval(() => {
-        if (Date.now() - lastHeardRef.current > 1500 && isListening) {
+        if (Date.now() - lastHeardRef.current > 2000 && isListening) {
+          console.log("[SR] Auto-timeout triggered - no speech detected for 2 seconds")
           stopListening()
         }
-      }, 200)
+      }, 500) // Check every 500ms instead of 200ms for better performance
       return () => clearInterval(interval)
     }
   }, [isListening])
@@ -203,7 +291,8 @@ export default function PatientInterface() {
     recognitionRef.current.continuous = true
     recognitionRef.current.interimResults = true
     recognitionRef.current.lang = "en-US"
-    recognitionRef.current.maxAlternatives = 1
+    recognitionRef.current.maxAlternatives = 3 // Increased alternatives for better accuracy
+    // Don't set grammars - let it use default behavior for any speech
 
     recognitionRef.current.onstart = () => {
       console.log("Speech recognition started")
@@ -216,14 +305,40 @@ export default function PatientInterface() {
       lastHeardRef.current = Date.now()
       let interim = "",
         final = ""
+      let overallConfidence = 0
+      let resultCount = 0
+      
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript
-        if (event.results[i].isFinal) final += t
-        else interim += t
+        const result = event.results[i]
+        // Try to get the best alternative
+        let bestTranscript = result[0].transcript
+        let bestConfidence = result[0].confidence
+        
+        // Check all alternatives for better confidence
+        for (let j = 0; j < result.length; j++) {
+          if (result[j].confidence > bestConfidence) {
+            bestTranscript = result[j].transcript
+            bestConfidence = result[j].confidence
+          }
+        }
+        
+        overallConfidence += bestConfidence
+        resultCount++
+        
+        if (result.isFinal) {
+          final += bestTranscript + " "
+        } else {
+          interim += bestTranscript + " "
+        }
       }
-      setCurrentTranscript(interim || final)
-      transcriptRef.current = interim || final
-      console.log("[SR] onresult", interim || final)
+      
+      const finalText = final.trim()
+      const interimText = interim.trim()
+      const avgConfidence = resultCount > 0 ? overallConfidence / resultCount : 0
+      
+      setCurrentTranscript(interimText || finalText)
+      transcriptRef.current = interimText || finalText
+      console.log("[SR] onresult - Final:", finalText, "Interim:", interimText, "Avg Confidence:", avgConfidence)
     }
 
     recognitionRef.current.onerror = (event: any) => {
@@ -255,7 +370,7 @@ export default function PatientInterface() {
       console.log("Speech recognition ended")
       const finalText = transcriptRef.current.trim()
       console.log("Final transcript on end:", finalText)
-      if (finalText && finalText.length > 1) {
+      if (finalText && finalText.length > 2) { // Increased minimum length for better accuracy
         // Process the complete speech when recognition ends
         handleSpeechResult(finalText)
       } else if (voiceChatMode) {
@@ -263,9 +378,10 @@ export default function PatientInterface() {
         if (restartTimeout.current) clearTimeout(restartTimeout.current)
         restartTimeout.current = setTimeout(() => {
           if (voiceChatMode && !isListening && !speechSynthesis.speaking) {
+            console.log("[SR] Restarting speech recognition for voice chat mode")
             startListening()
           }
-        }, 200) // Reduced delay for faster restart
+        }, 300) // Slightly longer delay for more stable restart
       }
       setIsListening(false)
       setCurrentTranscript("")
@@ -291,19 +407,32 @@ export default function PatientInterface() {
     try {
       // Request microphone permission explicitly for iOS/iPhone
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        await navigator.mediaDevices.getUserMedia({ audio: true })
+        console.log("[SR] Requesting microphone permission...")
+        await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          } 
+        })
+        console.log("[SR] Microphone permission granted")
       }
       // If recognition is already running, stop it first, then start after a short delay
       if (recognitionRef.current && isListening) {
+        console.log("[SR] Stopping existing recognition before restart")
         recognitionRef.current.stop()
         setTimeout(() => {
-          if (recognitionRef.current) recognitionRef.current.start()
+          if (recognitionRef.current) {
+            console.log("[SR] Starting recognition after restart")
+            recognitionRef.current.start()
+          }
         }, 500) // 500ms delay to allow proper restart
       } else if (recognitionRef.current) {
+        console.log("[SR] Starting new recognition")
         recognitionRef.current.start()
       }
       lastHeardRef.current = Date.now()
-      console.log("[SR] startListening")
+      console.log("[SR] startListening completed")
     } catch (error: any) {
       console.error("Error starting speech recognition:", error)
       if (error.name === "NotAllowedError") {
@@ -355,8 +484,8 @@ export default function PatientInterface() {
 
       // If photos are returned, show them
       if (aiResponse.photos && aiResponse.photos.length > 0) {
-        setShowingMemoryPhotos(aiResponse.photos)
-        setCurrentMemoryIndex(0)
+        setCurrentPhotos(aiResponse.photos)
+        setShowPhotos(true)
       }
 
       // Speak the response immediately
@@ -395,8 +524,8 @@ export default function PatientInterface() {
 
       // If photos are returned, show them
       if (aiResponse.photos && aiResponse.photos.length > 0) {
-        setShowingMemoryPhotos(aiResponse.photos)
-        setCurrentMemoryIndex(0)
+        setCurrentPhotos(aiResponse.photos)
+        setShowPhotos(true)
       }
 
       // Speak the response immediately
@@ -412,11 +541,20 @@ export default function PatientInterface() {
     console.log("getAIResponse called with:", message)
     try {
       console.log("Sending message to AI:", message)
+      
+      // Get auth token for API calls
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({
           message: message,
           conversationHistory: messages.slice(-10), // Send last 10 messages for context
@@ -444,16 +582,21 @@ export default function PatientInterface() {
           messageLower.includes("home") ||
           messageLower.includes("house") ||
           (messageLower.includes("miss") && messageLower.includes("home")) ||
-          messageLower.includes("wish i could see")
+          messageLower.includes("wish i could see") ||
+          messageLower.includes("family") ||
+          messageLower.includes("photo") ||
+          messageLower.includes("picture") ||
+          messageLower.includes("memory")
         ) {
-          // Manually fetch home photos
+          // Manually fetch relevant photos
           try {
-            const photoResponse = await fetch(`/api/photos?query=home house family`, {
+            const photoResponse = await fetch(`/api/photos?query=${encodeURIComponent(message)}`, {
+              headers,
               credentials: 'include'
             })
             const photoData = await photoResponse.json()
             photosToShow = photoData.photos || []
-            console.log("Manually fetched home photos:", photosToShow.length)
+            console.log("Manually fetched photos:", photosToShow.length)
           } catch (error) {
             console.error("Error fetching photos manually:", error)
           }
@@ -469,9 +612,19 @@ export default function PatientInterface() {
       // Even in fallback, try to show relevant photos
       const messageLower = message.toLowerCase()
       let fallbackPhotos = undefined
-      if (messageLower.includes("home") || messageLower.includes("house")) {
+      if (messageLower.includes("home") || messageLower.includes("house") || messageLower.includes("family")) {
         try {
-          const photoResponse = await fetch(`/api/photos?query=home`, {
+          const token = localStorage.getItem('authToken');
+          const headers: HeadersInit = {
+            "Content-Type": "application/json",
+          };
+          
+          if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+          }
+          
+          const photoResponse = await fetch(`/api/photos?query=home family`, {
+            headers,
             credentials: 'include'
           })
           const photoData = await photoResponse.json()
@@ -496,23 +649,25 @@ export default function PatientInterface() {
   // Improved fallback responses that are more personalized
   const getPersonalizedFallback = (message: string): string => {
     const lowerMessage = message.toLowerCase()
+    const userName = currentUser?.firstName || "there"
+    
     if (lowerMessage.includes("birthday") || lowerMessage.includes("celebration")) {
-      return "That sounds like such a special birthday, Sid! Tell me more about your 75th birthday celebration. Who was there with you? What made it so memorable?"
+      return `That sounds like such a special birthday, ${userName}! Tell me more about your birthday celebration. Who was there with you? What made it so memorable?`
     }
     if (lowerMessage.includes("75th") || lowerMessage.includes("last year")) {
-      return "Your 75th birthday must have been wonderful, Sid. I'd love to hear more about that celebration. What was your favorite part of the day?"
+      return `Your birthday must have been wonderful, ${userName}. I'd love to hear more about that celebration. What was your favorite part of the day?`
     }
     if (lowerMessage.includes("home") || lowerMessage.includes("house")) {
-      return "I can hear how much your home means to you, Sid. What's your favorite memory from your home? Maybe a special room or activity you enjoyed there?"
+      return `I can hear how much your home means to you, ${userName}. What's your favorite memory from your home? Maybe a special room or activity you enjoyed there?`
     }
     if (lowerMessage.includes("hello") || lowerMessage.includes("hi")) {
-      return `Hello ${lowerMessage.includes("sid") ? "Sid" : "there"}! I'm so glad you're here. How are you feeling today?`
+      return `Hello ${userName}! I'm so glad you're here. How are you feeling today?`
     }
     if (lowerMessage.includes("anxious") || lowerMessage.includes("anxiety")) {
-      return "I understand you're feeling anxious, Sid. That's completely normal. Let's try some deep breathing together. Breathe in slowly for 4 counts, hold for 4, then breathe out for 4. You're safe here with me."
+      return `I understand you're feeling anxious, ${userName}. That's completely normal. Let's try some deep breathing together. Breathe in slowly for 4 counts, hold for 4, then breathe out for 4. You're safe here with me.`
     }
     if (lowerMessage.includes("sleep") || lowerMessage.includes("tired")) {
-      return "Having trouble sleeping can be really difficult, Sid. Let's try some calming techniques. Would you like to try the breathing exercise or look at some peaceful scenes? Sometimes gentle relaxation can help prepare your mind for rest."
+      return `Having trouble sleeping can be really difficult, ${userName}. Let's try some calming techniques. Would you like to try the breathing exercise or look at some peaceful scenes? Sometimes gentle relaxation can help prepare your mind for rest.`
     }
     if (
       lowerMessage.includes("sad") ||
@@ -520,22 +675,23 @@ export default function PatientInterface() {
       lowerMessage.includes("not good") ||
       lowerMessage.includes("bad")
     ) {
-      return "I hear that you're not feeling good right now, Sid. It's okay to have difficult feelings. Take a deep breath with me. You're safe, and I'm here to help you feel more peaceful."
+      return `I hear that you're not feeling good right now, ${userName}. It's okay to have difficult feelings. Take a deep breath with me. You're safe, and I'm here to help you feel more peaceful.`
     }
     if (lowerMessage.includes("mood") || lowerMessage.includes("feeling")) {
-      return "I'm here to help you with your mood, Sid. Sometimes when we're feeling overwhelmed, it helps to focus on our breathing or look at something peaceful. Would you like to try one of the calming activities?"
+      return `I'm here to help you with your mood, ${userName}. Sometimes when we're feeling overwhelmed, it helps to focus on our breathing or look at something peaceful. Would you like to try one of the calming activities?`
     }
     if (lowerMessage.includes("confused") || lowerMessage.includes("lost") || lowerMessage.includes("don't know")) {
-      return "It's okay to feel confused sometimes, Sid. You don't need to worry about remembering everything. Let's focus on this moment together. You're doing just fine."
+      return `It's okay to feel confused sometimes, ${userName}. You don't need to worry about remembering everything. Let's focus on this moment together. You're doing just fine.`
     }
     // Default personalized response
-    return "Thank you for sharing that with me, Sid. I'm here to listen and support you. What would help you feel more comfortable right now?"
+    return `Thank you for sharing that with me, ${userName}. I'm here to listen and support you. What would help you feel more comfortable right now?`
   }
 
   // Speak AI response with selected voice
   const speakResponse = (text: string, onEnd?: () => void) => {
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.volume = volume[0] / 100
+    const currentVolume = volume[0] / 100
+    utterance.volume = currentVolume
     utterance.rate = 1.0 // Faster for quicker responses
     utterance.pitch = 1.0
     if (selectedVoice) {
@@ -549,7 +705,7 @@ export default function PatientInterface() {
       onEnd && onEnd()
     }
     speechSynthesis.speak(utterance)
-    console.log("[TTS] speak", text)
+    console.log("[TTS] speak", text, "with volume:", currentVolume)
   }
 
   // Helper function to add error messages
@@ -597,7 +753,15 @@ export default function PatientInterface() {
 
   // Handle volume change
   const handleVolumeChange = (newVolume: number[]) => {
+    console.log("Volume changed to:", newVolume[0])
     setVolume(newVolume)
+    
+    // If speech synthesis is currently speaking, stop it and restart with new volume
+    if (speechSynthesis.speaking) {
+      speechSynthesis.cancel()
+      // Optionally restart the last message with new volume
+      // This would require storing the last message, but for now just stop
+    }
   }
 
   // Test selected voice
@@ -606,10 +770,12 @@ export default function PatientInterface() {
       const testText = "Hello! This is a test of the selected voice. How does it sound to you?"
       const utterance = new SpeechSynthesisUtterance(testText)
       utterance.voice = selectedVoice
-      utterance.volume = volume[0] / 100
+      const currentVolume = volume[0] / 100
+      utterance.volume = currentVolume
       utterance.rate = 1.0
       utterance.pitch = 1.0
       speechSynthesis.speak(utterance)
+      console.log("[TTS] test voice with volume:", currentVolume)
     }
   }
 
@@ -917,91 +1083,91 @@ export default function PatientInterface() {
   }
 
   // Peaceful Scene view with auto-changing images
-  if (currentActivity === "peaceful scene") {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-green-400 via-green-500 to-green-600 text-white">
-        {/* Header */}
-        <div className="px-6 pt-8 pb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Heart className="w-6 h-6 fill-white" />
-              <span className="text-xl font-semibold">CalmPath</span>
-            </div>
-            <Button
-              onClick={() => setCurrentActivity(null)}
-              variant="ghost"
-              size="sm"
-              className="text-white hover:bg-white/20"
-            >
-              Done
-            </Button>
-          </div>
-        </div>
+  // if (currentActivity === "peaceful scene") {
+  //   return (
+  //     <div className="min-h-screen bg-gradient-to-b from-green-400 via-green-500 to-green-600 text-white">
+  //       {/* Header */}
+  //       <div className="px-6 pt-8 pb-6">
+  //         <div className="flex items-center justify-between">
+  //           <div className="flex items-center gap-2">
+  //             <Heart className="w-6 h-6 fill-white" />
+  //             <span className="text-xl font-semibold">CalmPath</span>
+  //           </div>
+  //           <Button
+  //             onClick={() => setCurrentActivity(null)}
+  //             variant="ghost"
+  //             size="sm"
+  //             className="text-white hover:bg-white/20"
+  //           >
+  //             Done
+  //           </Button>
+  //         </div>
+  //       </div>
 
-        {/* Peaceful Scene Content */}
-        <div className="bg-gray-50 text-gray-900 rounded-t-3xl min-h-[calc(100vh-120px)] px-6 pt-12">
-          {/* Quick Comfort Activities */}
-          <div className="mb-12">
-            <div className="grid grid-cols-4 gap-3">
-              {comfortActivities.map((activity, index) => (
-                <Card
-                  key={index}
-                  className={`p-3 text-center hover:shadow-md transition-all cursor-pointer ${activity.name === "Peaceful Scene" ? "border-2 border-green-500 bg-green-50" : ""
-                    }`}
-                  onClick={() => handleActivityClick(activity.name)}
-                >
-                  <activity.icon
-                    className={`w-6 h-6 mx-auto mb-1 ${activity.name === "Peaceful Scene" ? "text-green-600" : "text-blue-500"
-                      }`}
-                  />
-                  <p className="text-xs font-medium">{activity.name}</p>
-                </Card>
-              ))}
-            </div>
-          </div>
+  //       {/* Peaceful Scene Content */}
+  //       <div className="bg-gray-50 text-gray-900 rounded-t-3xl min-h-[calc(100vh-120px)] px-6 pt-12">
+  //         {/* Quick Comfort Activities */}
+  //         <div className="mb-12">
+  //           <div className="grid grid-cols-4 gap-3">
+  //             {comfortActivities.map((activity, index) => (
+  //               <Card
+  //                 key={index}
+  //                 className={`p-3 text-center hover:shadow-md transition-all cursor-pointer ${activity.name === "Peaceful Scene" ? "border-2 border-green-500 bg-green-50" : ""
+  //                   }`}
+  //                 onClick={() => handleActivityClick(activity.name)}
+  //               >
+  //                 <activity.icon
+  //                   className={`w-6 h-6 mx-auto mb-1 ${activity.name === "Peaceful Scene" ? "text-green-600" : "text-blue-500"
+  //                     }`}
+  //                 />
+  //                 <p className="text-xs font-medium">{activity.name}</p>
+  //               </Card>
+  //             ))}
+  //           </div>
+  //         </div>
 
-          {/* Peaceful Scene with Auto-changing Images */}
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-light mb-8 text-gray-800">Peaceful moments</h2>
-            <div className="relative mb-8 rounded-2xl overflow-hidden shadow-2xl">
-              <div className="aspect-video bg-gradient-to-br from-blue-200 to-green-200 relative">
-                <img
-                  src={peacefulImages[currentImageIndex] || "/placeholder.svg"}
-                  alt="Peaceful scene"
-                  className="w-full h-full object-cover transition-opacity duration-1000"
-                  style={{ opacity: 1 }}
-                />
-                {/* Image overlay with gentle gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-                {/* Image indicators */}
-                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-                  {peacefulImages.map((_, index) => (
-                    <div
-                      key={index}
-                      className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentImageIndex ? "bg-white" : "bg-white/50"
-                        }`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <p className="text-lg font-light mb-2 text-gray-700">
-              Take a moment to breathe and enjoy this peaceful view
-            </p>
-            <p className="text-gray-500 text-sm">Let your mind rest and find calm in these beautiful scenes</p>
-          </div>
+  //         {/* Peaceful Scene with Auto-changing Images */}
+  //         <div className="text-center mb-8">
+  //           <h2 className="text-3xl font-light mb-8 text-gray-800">Peaceful moments</h2>
+  //           <div className="relative mb-8 rounded-2xl overflow-hidden shadow-2xl">
+  //             <div className="aspect-video bg-gradient-to-br from-blue-200 to-green-200 relative">
+  //               <img
+  //                 src={peacefulImages[currentImageIndex] || "/placeholder.svg"}
+  //                 alt="Peaceful scene"
+  //                 className="w-full h-full object-cover transition-opacity duration-1000"
+  //                 style={{ opacity: 1 }}
+  //               />
+  //               {/* Image overlay with gentle gradient */}
+  //               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+  //               {/* Image indicators */}
+  //               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+  //                 {peacefulImages.map((_, index) => (
+  //                   <div
+  //                     key={index}
+  //                     className={`w-2 h-2 rounded-full transition-all duration-300 ${index === currentImageIndex ? "bg-white" : "bg-white/50"
+  //                       }`}
+  //                   />
+  //                 ))}
+  //               </div>
+  //             </div>
+  //           </div>
+  //           <p className="text-lg font-light mb-2 text-gray-700">
+  //             Take a moment to breathe and enjoy this peaceful view
+  //           </p>
+  //           <p className="text-gray-500 text-sm">Let your mind rest and find calm in these beautiful scenes</p>
+  //         </div>
 
-          {/* Clean Bottom Controls */}
-          <div className="flex items-center justify-center py-6 border-t">
-            <div className="flex items-center gap-3">
-              {volume[0] === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              <Slider value={volume} onValueChange={handleVolumeChange} max={100} step={1} className="w-24" />
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  //         {/* Clean Bottom Controls */}
+  //         <div className="flex items-center justify-center py-6 border-t">
+  //           <div className="flex items-center gap-3">
+  //             {volume[0] === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+  //             <Slider value={volume} onValueChange={handleVolumeChange} max={100} step={1} className="w-24" />
+  //           </div>
+  //         </div>
+  //       </div>
+  //     </div>
+  //   )
+  // }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-400 via-blue-500 to-blue-600 text-white">
@@ -1016,7 +1182,10 @@ export default function PatientInterface() {
 
           {/* Right Side: Notification + Login */}
           <div className="flex flex-row-reverse items-center gap-3">
-            <NotificationManager patientId={1} />
+            <NotificationManager 
+              patientId={patientId || 1} 
+              isVoiceChatActive={voiceChatMode || isListening}
+            />
 
             {/* <Link href="/auth/login">
               <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 flex items-center">
@@ -1026,7 +1195,12 @@ export default function PatientInterface() {
             </Link> */}
           </div>
         </div>
-        <p className="text-sm opacity-90 mb-2">Your caring voice companion</p>
+        <p className="text-sm opacity-90 mb-2">
+          Your caring voice companion
+          {currentUser?.firstName && (
+            <span className="ml-2 font-medium">• Hello, {currentUser.firstName}!</span>
+          )}
+        </p>
         <div className="inline-block bg-green-500 text-white px-3 py-1 rounded-full text-sm">
           {voiceChatMode
             ? isListening
@@ -1058,111 +1232,7 @@ export default function PatientInterface() {
           </Alert>
         )}
 
-        {/* Clean Volume Control */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            {volume[0] === 0 ? (
-              <VolumeX className="w-5 h-5 text-gray-600" />
-            ) : (
-              <Volume2 className="w-5 h-5 text-gray-600" />
-            )}
-            <span className="text-sm font-medium">Volume</span>
-            <span className="text-sm text-blue-600 font-medium">{volume[0]}%</span>
-          </div>
-          <Slider value={volume} onValueChange={handleVolumeChange} max={100} step={1} className="w-full" />
-        </div>
 
-        {/* Voice Settings */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <Volume2 className="w-5 h-5 text-gray-600" />
-            <span className="text-sm font-medium">Voice Selection</span>
-          </div>
-          {!speechSynthesisSupported ? (
-            <div className="text-xs text-gray-500 italic p-3 bg-gray-50 rounded">
-              Speech synthesis not supported in this browser
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Language Filter */}
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Filter by Language:</label>
-                <select
-                  value={voiceLanguageFilter}
-                  onChange={(e) => setVoiceLanguageFilter(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-sm"
-                >
-                  <option value="all">All Languages</option>
-                  {getUniqueLanguages().map((lang) => (
-                    <option key={lang} value={lang}>
-                      {lang}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Voice Selection */}
-              <div>
-                <label className="block text-xs text-gray-600 mb-1">Select Voice:</label>
-                <select
-                  value={selectedVoice?.name || ""}
-                  onChange={(e) => {
-                    const voice = getFilteredVoices().find(v => v.name === e.target.value)
-                    setSelectedVoice(voice || null)
-                  }}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="">Select a voice...</option>
-                  {getFilteredVoices().map((voice) => (
-                    <option key={voice.name} value={voice.name}>
-                      {voice.name} ({voice.lang})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedVoice && (
-                <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-                  <p><strong>Current:</strong> {selectedVoice.name}</p>
-                  <p><strong>Language:</strong> {selectedVoice.lang}</p>
-                  <p><strong>Default:</strong> {selectedVoice.default ? "Yes" : "No"}</p>
-                </div>
-              )}
-              {availableVoices.length === 0 && (
-                <div className="text-xs text-gray-500 italic">
-                  Loading available voices...
-                </div>
-              )}
-              {availableVoices.length > 0 && (
-                <div className="text-xs text-gray-500">
-                  {getFilteredVoices().length} voice{getFilteredVoices().length !== 1 ? 's' : ''} available
-                  {voiceLanguageFilter !== "all" && ` (${availableVoices.length} total)`}
-                </div>
-              )}
-              {selectedVoice && (
-                <div className="flex gap-2">
-                  <Button
-                    onClick={testSelectedVoice}
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-blue-600 border-blue-200 hover:bg-blue-50"
-                  >
-                    <Volume2 className="w-4 h-4 mr-2" />
-                    Test Voice
-                  </Button>
-                  <Button
-                    onClick={resetToDefaultVoice}
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 text-gray-600 border-gray-200 hover:bg-gray-50"
-                  >
-                    Reset to Default
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         {/* Simplified Voice Interface */}
         <div className="text-center mb-8">
@@ -1212,22 +1282,40 @@ export default function PatientInterface() {
           <p className="text-gray-600 text-sm">One tap to start session, one tap to stop</p>
         </div>
 
-        {/* Real-time Speech Display */}
-        {isListening && (
-          <div className="mb-8 p-6 bg-white rounded-lg border-2 border-blue-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="font-medium text-gray-700">You're saying:</span>
-            </div>
-            <div className="min-h-[60px] p-4 bg-gray-50 rounded-lg border">
-              {currentTranscript ? (
-                <p className="text-lg text-gray-800 leading-relaxed">{currentTranscript}</p>
-              ) : (
-                <p className="text-gray-400 italic">Start speaking... I'm listening for your complete message</p>
-              )}
-            </div>
-          </div>
-        )}
+                 {/* Real-time Speech Display */}
+         {isListening && (
+           <div className="mb-8 p-6 bg-white rounded-lg border-2 border-blue-200 shadow-sm">
+             <div className="flex items-center gap-2 mb-3">
+               <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+               <span className="font-medium text-gray-700">You're saying:</span>
+               <div className="ml-auto flex items-center gap-2">
+                 <div className="text-xs text-gray-500">Listening...</div>
+                 <div className="flex gap-1">
+                   <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse"></div>
+                   <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                   <div className="w-1 h-1 bg-green-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                 </div>
+               </div>
+             </div>
+             <div className="min-h-[60px] p-4 bg-gray-50 rounded-lg border">
+               {currentTranscript ? (
+                 <div>
+                   <p className="text-lg text-gray-800 leading-relaxed">{currentTranscript}</p>
+                   <div className="mt-2 text-xs text-gray-500">
+                     💡 Tip: Speak clearly and at a normal pace for better recognition
+                   </div>
+                 </div>
+               ) : (
+                 <div>
+                   <p className="text-gray-400 italic">Start speaking... I'm listening for your complete message</p>
+                   <div className="mt-2 text-xs text-gray-500">
+                     💡 Tip: Speak clearly and at a normal pace for better recognition
+                   </div>
+                 </div>
+               )}
+             </div>
+           </div>
+         )}
 
         {/* Text Input Alternative */}
         {(showTextInput || !speechSupported) && (
@@ -1317,21 +1405,247 @@ export default function PatientInterface() {
           </div>
         </div>
 
-        {/* Clean Bottom Actions */}
-        {/* <div className="flex items-center justify-center py-4 border-t">
+        {/* Test Memory Photos Button */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
+            <span className="font-medium">Test Features</span>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            <Card
+              className="p-4 text-center hover:shadow-md transition-shadow cursor-pointer"
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem('authToken');
+                  const headers: HeadersInit = {
+                    "Content-Type": "application/json",
+                  };
+                  
+                  if (token) {
+                    headers["Authorization"] = `Bearer ${token}`;
+                  }
+                  
+                  const response = await fetch(`/api/photos?query=family home`, {
+                    headers,
+                    credentials: 'include'
+                  });
+                  const data = await response.json();
+                  console.log("Test memory photos response:", data);
+                  
+                  if (data.photos && data.photos.length > 0) {
+                    setCurrentPhotos(data.photos);
+                    setShowPhotos(true);
+                    addErrorMessage(`Found ${data.photos.length} memory photos! Check the photo viewer.`);
+                  } else {
+                    addErrorMessage("No memory photos found. Try uploading some from the family dashboard.");
+                  }
+                } catch (error) {
+                  console.error("Error testing memory photos:", error);
+                  addErrorMessage("Error testing memory photos. Check console for details.");
+                }
+              }}
+            >
+              <Camera className="w-8 h-8 mx-auto mb-2 text-purple-500" />
+              <p className="text-sm font-medium">Test Memory Photos</p>
+              <p className="text-xs text-gray-500 mt-1">Click to test memory photos feature</p>
+            </Card>
+          </div>
+        </div>
+
+        {/* Settings Button */}
+        <div className="flex items-center justify-center py-4 border-t">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowTextInput(!showTextInput)}
+            onClick={() => setShowSettings(!showSettings)}
             className="text-gray-600 hover:text-gray-800"
           >
-            <Type className="w-4 h-4 mr-2" />
-            {showTextInput ? "Hide" : "Show"} Text Input
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
           </Button>
-        </div> */}
+        </div>
       </div>
 
+      {/* Settings Popup */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
+          <div className="bg-white rounded-t-3xl w-full max-w-md max-h-[80vh] overflow-hidden">
+            {/* Settings Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-800">Settings</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowSettings(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
 
+            {/* Settings Content */}
+            <div className="p-4 space-y-6 max-h-[60vh] overflow-y-auto">
+              {/* Volume Control */}
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  {volume[0] === 0 ? (
+                    <VolumeX className="w-5 h-5 text-gray-600" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-gray-600" />
+                  )}
+                  <span className="text-sm font-medium">Volume</span>
+                  <span className="text-sm text-blue-600 font-medium">{volume[0]}%</span>
+                </div>
+                <Slider value={volume} onValueChange={handleVolumeChange} max={100} step={1} className="w-full" />
+              </div>
+
+              {/* Voice Settings */}
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <Volume2 className="w-5 h-5 text-gray-600" />
+                  <span className="text-sm font-medium">Voice Selection</span>
+                </div>
+                {!speechSynthesisSupported ? (
+                  <div className="text-xs text-gray-500 italic p-3 bg-gray-50 rounded">
+                    Speech synthesis not supported in this browser
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                                         {/* Language Filter */}
+                     <div>
+                       <label className="block text-xs text-gray-600 mb-1">Filter by Language:</label>
+                       <select
+                         value={voiceLanguageFilter}
+                         onChange={(e) => setVoiceLanguageFilter(e.target.value)}
+                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 text-sm appearance-none cursor-pointer"
+                         style={{
+                           backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                           backgroundPosition: 'right 0.5rem center',
+                           backgroundRepeat: 'no-repeat',
+                           backgroundSize: '1.5em 1.5em',
+                           paddingRight: '2.5rem'
+                         }}
+                       >
+                         <option value="all" className="text-gray-900 bg-white">All Languages</option>
+                         {getUniqueLanguages().map((lang) => (
+                           <option key={lang} value={lang} className="text-gray-900 bg-white">
+                             {lang}
+                           </option>
+                         ))}
+                       </select>
+                     </div>
+
+                     {/* Voice Selection */}
+                     <div>
+                       <label className="block text-xs text-gray-600 mb-1">Select Voice:</label>
+                       <select
+                         value={selectedVoice?.name || ""}
+                         onChange={(e) => {
+                           const voice = getFilteredVoices().find(v => v.name === e.target.value)
+                           setSelectedVoice(voice || null)
+                         }}
+                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 text-sm appearance-none cursor-pointer"
+                         style={{
+                           backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
+                           backgroundPosition: 'right 0.5rem center',
+                           backgroundRepeat: 'no-repeat',
+                           backgroundSize: '1.5em 1.5em',
+                           paddingRight: '2.5rem'
+                         }}
+                       >
+                         <option value="" className="text-gray-500 bg-white">Select a voice...</option>
+                         {getFilteredVoices().map((voice) => (
+                           <option key={voice.name} value={voice.name} className="text-gray-900 bg-white">
+                             {voice.name} ({voice.lang})
+                           </option>
+                         ))}
+                       </select>
+                     </div>
+
+                    {selectedVoice && (
+                      <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
+                        <p><strong>Current:</strong> {selectedVoice.name}</p>
+                        <p><strong>Language:</strong> {selectedVoice.lang}</p>
+                        <p><strong>Default:</strong> {selectedVoice.default ? "Yes" : "No"}</p>
+                      </div>
+                    )}
+                    {availableVoices.length === 0 && (
+                      <div className="text-xs text-gray-500 italic">
+                        Loading available voices...
+                      </div>
+                    )}
+                    {availableVoices.length > 0 && (
+                      <div className="text-xs text-gray-500">
+                        {getFilteredVoices().length} voice{getFilteredVoices().length !== 1 ? 's' : ''} available
+                        {voiceLanguageFilter !== "all" && ` (${availableVoices.length} total)`}
+                      </div>
+                    )}
+                    {selectedVoice && (
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={testSelectedVoice}
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-blue-600 border-blue-200 hover:bg-blue-50"
+                        >
+                          <Volume2 className="w-4 h-4 mr-2" />
+                          Test Voice
+                        </Button>
+                        <Button
+                          onClick={resetToDefaultVoice}
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-gray-600 border-gray-200 hover:bg-gray-50"
+                        >
+                          Reset to Default
+                        </Button>
+                      </div>
+                                         )}
+                   </div>
+                 )}
+               </div>
+
+                               {/* Navigation Section */}
+                <div className="pt-4 border-t space-y-3">
+                  <Button
+                    onClick={() => {
+                      window.location.href = '/family-dashboard'
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-blue-600 border-blue-200 hover:bg-blue-50"
+                  >
+                    <User className="w-4 h-4 mr-2" />
+                    Family Dashboard
+                  </Button>
+                  
+                  <Button
+                    onClick={() => {
+                      // Clear any stored session data
+                      localStorage.removeItem('authToken')
+                      sessionStorage.clear()
+                      // Redirect to login page
+                      window.location.href = '/auth/login'
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    <LogIn className="w-4 h-4 mr-2" />
+                    Logout
+                  </Button>
+                </div>
+             </div>
+           </div>
+         </div>
+       )}
+
+      {/* Photo Display Modal */}
+      <PhotoDisplay
+        photos={currentPhotos}
+        isOpen={showPhotos}
+        onClose={() => setShowPhotos(false)}
+      />
     </div>
   )
 }

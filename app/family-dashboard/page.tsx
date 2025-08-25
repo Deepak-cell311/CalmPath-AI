@@ -20,7 +20,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import { Heart, Camera, MessageCircle, Bell, User, LogOut, Plus, Upload, X, Tag, CreditCard } from "lucide-react"
+import { Heart, Camera, MessageCircle, Bell, User, LogOut, Plus, Upload, X, Tag, CreditCard, RefreshCw } from "lucide-react"
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { toast } from "@/hooks/use-toast";
 
@@ -56,7 +56,7 @@ export default function FamilyDashboard() {
 
     // All hooks must be called at the top level, before any conditional returns
     const [photos, setPhotos] = useState<MemoryPhoto[]>([])
-    const [patientId, setPatientId] = useState<number>(1); // Set default patient ID to 1
+    const [patientId, setPatientId] = useState<number | null>(null); // Will be set dynamically
     const [isLoading, setIsLoading] = useState(false);
     const [medications, setMedications] = useState<Medication[]>([]);
     const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
@@ -74,13 +74,21 @@ export default function FamilyDashboard() {
         { id: 1, date: "2024-01-15", duration: "5 min", mood: "calm", summary: "Talked about morning routine" },
         { id: 2, date: "2024-01-14", duration: "8 min", mood: "happy", summary: "Shared memories about gardening" },
     ])
-    const [personalInfo, setPersonalInfo] = useState({
-        work: "Retired engineer, worked on bridges and infrastructure projects.",
-        family: "Wife: Mary (passed away), Children: John, Sarah. Grandchildren: Emily, David, Olivia.",
-        hobbies: "Gardening (especially roses), reading historical novels, playing chess, listening to classical music.",
-        food: "Shepherd's pie, apple crumble, strong black coffee.",
-        other: "Loves quiet mornings, enjoys talking about his youth, can get agitated by loud noises.",
+    const [dashboardData, setDashboardData] = useState({
+        todaySessions: { count: 0, sessions: [] },
+        memoryPhotos: { count: 0, photos: [] },
+        recentActivity: []
     })
+    const [personalInfo, setPersonalInfo] = useState({
+        work: "",
+        family: "",
+        hobbies: "",
+        food: "",
+        other: "",
+    })
+    const [isSavingPersonalInfo, setIsSavingPersonalInfo] = useState(false);
+    const [personalInfoSaved, setPersonalInfoSaved] = useState(false);
+    const [personalInfoModified, setPersonalInfoModified] = useState(false);
     const [newPhoto, setNewPhoto] = useState({
         name: "",
         description: "",
@@ -109,13 +117,52 @@ export default function FamilyDashboard() {
     const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
     const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null);
     const [isLoadingPaymentStatus, setIsLoadingPaymentStatus] = useState(false);
+    const [lastPaymentStatusCheck, setLastPaymentStatusCheck] = useState(0);
     const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
 
 
     useEffect(() => {
-        fetchExistingPhotos();
         fetchUserInviteStatus();
+        fetchPatientId();
     }, []);
+
+    useEffect(() => {
+        if (patientId) {
+            fetchExistingPhotos();
+            fetchPersonalInfo();
+            fetchDashboardData();
+        }
+    }, [patientId]);
+
+    // Auto-refresh dashboard data every 30 seconds
+    useEffect(() => {
+        if (!patientId) return;
+        
+        const interval = setInterval(() => {
+            fetchDashboardData();
+        }, 30000); // 30 seconds
+
+        return () => clearInterval(interval);
+    }, [patientId]);
+
+    const fetchDashboardData = async () => {
+        if (!patientId) return;
+        
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/dashboard-overview`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}` },
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                setDashboardData(data);
+            } else {
+                console.error("Error fetching dashboard data:", response.status);
+            }
+        } catch (error) {
+            console.error("Error fetching dashboard data:", error);
+        }
+    };
 
     const fetchExistingPhotos = async () => {
         try {
@@ -175,6 +222,66 @@ export default function FamilyDashboard() {
         }
     }
 
+    const fetchPatientId = async () => {
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                console.error("No auth token found");
+                return;
+            }
+
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/patient`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log("Patient ID fetched:", data.patientId);
+                setPatientId(data.patientId);
+            } else {
+                console.error("Failed to fetch patient ID:", response.status);
+            }
+        } catch (error) {
+            console.error("Error fetching patient ID:", error);
+        }
+    }
+
+    const fetchPersonalInfo = async () => {
+        if (!patientId) {
+            console.log("No patient ID available, skipping personal info fetch");
+            return;
+        }
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/personal-info`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}` },
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data) {
+                    setPersonalInfo({
+                        work: data.work || "",
+                        family: data.family || "",
+                        hobbies: data.hobbies || "",
+                        food: data.food || "",
+                        other: data.other || "",
+                    });
+                }
+            } else if (response.status === 404) {
+                // No personal info exists yet, keep default values
+                console.log("No personal info found for patient, using defaults");
+            } else {
+                console.error("Error fetching personal info:", response.status);
+            }
+        } catch (error) {
+            console.error("Error fetching personal info:", error);
+        }
+    };
+
     useEffect(() => {
         if (!patientId) return;
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/medications`, {
@@ -211,8 +318,17 @@ export default function FamilyDashboard() {
             return;
         }
 
+        // Prevent too frequent calls (debounce)
+        const now = Date.now();
+        if (now - lastPaymentStatusCheck < 5000) { // 5 second debounce
+            console.log("fetchPaymentStatus: Skipping - too recent check");
+            return;
+        }
+
         console.log("fetchPaymentStatus: Starting for user:", user.id);
         setIsLoadingPaymentStatus(true);
+        setLastPaymentStatusCheck(now);
+        
         try {
             const token = localStorage.getItem('authToken');
             if (!token) {
@@ -410,13 +526,68 @@ export default function FamilyDashboard() {
     };
 
     const handlePersonalInfoChange = (field: string, value: string) => {
-        setPersonalInfo((prev) => ({ ...prev, [field]: value }))
+        setPersonalInfo((prev) => ({ ...prev, [field]: value }));
+        setPersonalInfoModified(true);
+        setPersonalInfoSaved(false);
     }
 
-    const handleSavePersonalInfo = () => {
-        // In a real application, you would send this data to a backend
-        console.log("Saving personal info:", personalInfo)
-        alert("Personal information saved!")
+    const handleSavePersonalInfo = async () => {
+        if (!patientId) {
+            toast({
+                title: "Error",
+                description: "No patient ID available. Please refresh the page.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        setIsSavingPersonalInfo(true);
+        setPersonalInfoSaved(false);
+        setPersonalInfoModified(false);
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/patients/${patientId}/personal-info`, {
+                method: "POST",
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
+                },
+                body: JSON.stringify({
+                    ...personalInfo,
+                    createdBy: user?.id || "unknown"
+                }),
+            });
+
+            if (response.ok) {
+                console.log("Personal info saved successfully");
+                setPersonalInfoSaved(true);
+                toast({
+                    title: "Success",
+                    description: "Personal information saved successfully!",
+                });
+                
+                // Reset saved state after 3 seconds
+                setTimeout(() => {
+                    setPersonalInfoSaved(false);
+                }, 3000);
+            } else {
+                console.error("Failed to save personal info:", response.status);
+                toast({
+                    title: "Error",
+                    description: "Failed to save personal information. Please try again.",
+                    variant: "destructive",
+                });
+            }
+        } catch (error) {
+            console.error("Error saving personal info:", error);
+            toast({
+                title: "Error",
+                description: "Failed to save personal information. Please try again.",
+                variant: "destructive",
+            });
+        } finally {
+            setIsSavingPersonalInfo(false);
+        }
     }
 
 
@@ -480,7 +651,7 @@ export default function FamilyDashboard() {
             const requestBody = {
                 message: newReminder.message,
                 scheduledTime: new Date(newReminder.scheduledTime).toISOString(), // Always send ISO string
-                createdBy: "family-member", // In a real app, this would be the actual user ID
+                createdBy: user?.id || "unknown", // Use actual user ID
             };
 
             console.log("Request body:", requestBody);
@@ -499,15 +670,26 @@ export default function FamilyDashboard() {
                 console.log("Success! New reminder data:", newReminderData);
                 setReminders(prev => [...prev, newReminderData]);
                 setNewReminder({ message: "", scheduledTime: "" });
-                alert("Reminder added successfully!");
+                toast({
+                    title: "Success",
+                    description: "Reminder added successfully!",
+                });
             } else {
                 const error = await response.json();
                 console.error("Failed to create reminder:", error);
-                alert("Failed to create reminder: " + error.message);
+                toast({
+                    title: "Error",
+                    description: "Failed to create reminder: " + error.message,
+                    variant: "destructive",
+                });
             }
         } catch (error) {
             console.error("Error creating reminder:", error);
-            alert("Failed to create reminder: " + (error as Error).message);
+            toast({
+                title: "Error",
+                description: "Failed to create reminder: " + (error as Error).message,
+                variant: "destructive",
+            });
         }
     };
 
@@ -979,6 +1161,14 @@ export default function FamilyDashboard() {
                                 </div>
                             )}
                         </div> */}
+                        <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => window.location.href = '/main'}
+                        >
+                            <MessageCircle className="w-4 h-4 mr-2" />
+                            App
+                        </Button>
                         <Button variant="ghost" size="sm">
                             <User className="w-4 h-4 mr-2" />
                             {user?.firstName} {user?.lastName}
@@ -1003,6 +1193,19 @@ export default function FamilyDashboard() {
                         </TabsList>
 
                         <TabsContent value="overview" className="space-y-6">
+                            {/* Header with refresh button */}
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-semibold">Dashboard Overview</h2>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={fetchDashboardData}
+                                    className="flex items-center gap-2"
+                                >
+                                    <RefreshCw className="w-4 h-4" />
+                                    Refresh
+                                </Button>
+                            </div>
                             {/* Status Cards */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Card>
@@ -1010,17 +1213,18 @@ export default function FamilyDashboard() {
                                         <CardTitle className="text-sm font-medium">Today's Sessions</CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="text-2xl font-bold">3</div>
-                                        <p className="text-xs text-muted-foreground">+1 from yesterday</p>
+                                        <div className="text-2xl font-bold">{dashboardData.todaySessions.count}</div>
+                                        <p className="text-xs text-muted-foreground">
+                                            {dashboardData.todaySessions.count > 0 ? 'Active today' : 'No sessions today'}
+                                        </p>
                                     </CardContent>
                                 </Card>
-                                {/* Removed Average Mood card */}
                                 <Card>
                                     <CardHeader className="pb-2">
                                         <CardTitle className="text-sm font-medium">Memory Photos</CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="text-2xl font-bold">{photos.length}</div>
+                                        <div className="text-2xl font-bold">{dashboardData.memoryPhotos.count}</div>
                                         <p className="text-xs text-muted-foreground">Available for recall</p>
                                     </CardContent>
                                 </Card>
@@ -1033,20 +1237,31 @@ export default function FamilyDashboard() {
                                 </CardHeader>
                                 <CardContent>
                                     <div className="space-y-4">
-                                        <div className="flex items-center gap-4 p-3 bg-blue-50 rounded-lg">
-                                            <MessageCircle className="w-5 h-5 text-blue-600" />
-                                            <div className="flex-1">
-                                                <p className="font-medium">Morning conversation completed</p>
-                                                <p className="text-sm text-gray-600">5 minutes ago • Mood: Calm</p>
+                                        {dashboardData.recentActivity.length > 0 ? (
+                                            dashboardData.recentActivity.map((activity: any, index: number) => (
+                                                <div key={activity.id || index} className={`flex items-center gap-4 p-3 rounded-lg ${
+                                                    activity.type === 'conversation' ? 'bg-blue-50' : 'bg-green-50'
+                                                }`}>
+                                                    {activity.type === 'conversation' ? (
+                                                        <MessageCircle className="w-5 h-5 text-blue-600" />
+                                                    ) : (
+                                                        <Camera className="w-5 h-5 text-green-600" />
+                                                    )}
+                                                    <div className="flex-1">
+                                                        <p className="font-medium">{activity.title}</p>
+                                                        <p className="text-sm text-gray-600">
+                                                            {new Date(activity.timestamp).toLocaleString()} 
+                                                            {activity.type === 'conversation' && activity.sentiment && ` • Mood: ${activity.sentiment}`}
+                                                            {activity.type === 'photo_triggered' && activity.photoName && ` • "${activity.photoName}" shown`}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center text-gray-500 py-4">
+                                                No recent activity
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-4 p-3 bg-green-50 rounded-lg">
-                                            <Camera className="w-5 h-5 text-green-600" />
-                                            <div className="flex-1">
-                                                <p className="font-medium">Photo memory triggered</p>
-                                                <p className="text-sm text-gray-600">2 hours ago • "Family Home" shown</p>
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -1282,9 +1497,25 @@ export default function FamilyDashboard() {
                         <TabsContent value="personal-info" className="space-y-6">
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Patient Personal Information</CardTitle>
+                                    <CardTitle className="flex items-center gap-2">
+                                        Patient Personal Information
+                                        {isSavingPersonalInfo && (
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                                        )}
+                                        {personalInfoSaved && (
+                                            <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                        {personalInfoModified && !isSavingPersonalInfo && !personalInfoSaved && (
+                                            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                        )}
+                                    </CardTitle>
                                     <CardDescription>
                                         Provide details about the patient to help the AI personalize conversations.
+                                        {personalInfoModified && !isSavingPersonalInfo && !personalInfoSaved && (
+                                            <span className="block mt-1 text-orange-600 text-sm">• You have unsaved changes</span>
+                                        )}
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
@@ -1343,8 +1574,33 @@ export default function FamilyDashboard() {
                                         />
                                         <p className="text-xs text-gray-500 mt-1">Any other details that help personalize interaction.</p>
                                     </div>
-                                    <Button onClick={handleSavePersonalInfo} className="w-full">
-                                        Save Personal Info
+                                    <Button 
+                                        onClick={handleSavePersonalInfo} 
+                                        className={`w-full ${personalInfoModified && !isSavingPersonalInfo && !personalInfoSaved ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                                        disabled={isSavingPersonalInfo}
+                                    >
+                                        {isSavingPersonalInfo ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                                Saving...
+                                            </>
+                                        ) : personalInfoSaved ? (
+                                            <>
+                                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                Saved!
+                                            </>
+                                        ) : personalInfoModified ? (
+                                            <>
+                                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                                </svg>
+                                                Save Changes
+                                            </>
+                                        ) : (
+                                            "Save Personal Info"
+                                        )}
                                     </Button>
                                 </CardContent>
                             </Card>

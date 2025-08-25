@@ -8,9 +8,10 @@ import { toast } from "@/hooks/use-toast"
 
 interface NotificationManagerProps {
   patientId: number
+  isVoiceChatActive?: boolean
 }
 
-export function NotificationManager({ patientId }: NotificationManagerProps) {
+export function NotificationManager({ patientId, isVoiceChatActive = false }: NotificationManagerProps) {
   const [notifiedReminders, setNotifiedReminders] = useState<number[]>([]);
   const [notificationList, setNotificationList] = useState<{id: number, message: string, time: string, seen: boolean}[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -23,23 +24,33 @@ export function NotificationManager({ patientId }: NotificationManagerProps) {
       if (response.ok) {
         const data = await response.json();
         setReminders(data);
+      } else {
+        console.error("NotificationManager: Failed to fetch reminders:", response.status);
       }
     } catch (error) {
-      console.error("Error fetching reminders:", error);
+      console.error("NotificationManager: Error fetching reminders:", error);
     }
   };
 
-  // Check for due reminders every second
+  // Check for due reminders every 30 seconds (less frequent to avoid interference)
   useEffect(() => {
+    // Don't check reminders if voice chat is active to avoid interference
+    if (isVoiceChatActive) {
+      return;
+    }
+    
     const interval = setInterval(() => {
       const now = new Date();
+      
       reminders.forEach(reminder => {
         const reminderTime = new Date(reminder.scheduledTime);
+        
         if (
           reminderTime <= now &&
           !notifiedReminders.includes(reminder.id) &&
           !reminder.isCompleted
         ) {
+          console.log("NotificationManager: Triggering notification for reminder", reminder.id);
           toast({
             title: "Reminder",
             description: reminder.message,
@@ -51,30 +62,50 @@ export function NotificationManager({ patientId }: NotificationManagerProps) {
           ]);
         }
       });
-    }, 1000);
+    }, 30000); // Changed from 1000ms to 30000ms (30 seconds)
     return () => clearInterval(interval);
-  }, [reminders, notifiedReminders]);
+  }, [reminders, notifiedReminders, isVoiceChatActive]);
 
-  // Fetch reminders on mount
+  // Fetch reminders on mount and periodically
   useEffect(() => {
+    // Don't fetch reminders if voice chat is active to avoid interference
+    if (isVoiceChatActive) {
+      return;
+    }
+    
     fetchReminders();
-  }, [patientId]);
+    
+    // Refresh reminders every 2 minutes to ensure we have the latest data (less frequent)
+    const refreshInterval = setInterval(() => {
+      fetchReminders();
+    }, 120000); // Changed from 30000ms to 120000ms (2 minutes)
+    
+    return () => clearInterval(refreshInterval);
+  }, [patientId, isVoiceChatActive]);
 
   return (
     <div className="sticky top-4 right-4 z-50">
       <div className="relative">
         <button
-          className="relative focus:outline-none bg-white rounded-full p-2 shadow-lg border"
+          className={`relative focus:outline-none rounded-full p-2 shadow-lg border ${
+            isVoiceChatActive ? 'bg-gray-100' : 'bg-white'
+          }`}
           onClick={() => {
             setShowNotifications((prev) => !prev);
             // Mark all as seen when opening
             setNotificationList((prev) => prev.map(n => ({ ...n, seen: true })));
           }}
+          title={isVoiceChatActive ? "Notifications paused during voice chat" : "Notifications"}
         >
-          <Bell className="w-5 h-5 text-gray-600" />
-          {notificationList.filter(n => !n.seen).length > 0 && (
+          <Bell className={`w-5 h-5 ${isVoiceChatActive ? 'text-gray-400' : 'text-gray-600'}`} />
+          {notificationList.filter(n => !n.seen).length > 0 && !isVoiceChatActive && (
             <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
               {notificationList.filter(n => !n.seen).length}
+            </span>
+          )}
+          {isVoiceChatActive && (
+            <span className="absolute -top-1 -right-1 bg-gray-400 text-white text-xs rounded-full px-1.5 py-0.5">
+              ⏸️
             </span>
           )}
         </button>
@@ -88,6 +119,11 @@ export function NotificationManager({ patientId }: NotificationManagerProps) {
               </button>
             </div>
             <div className="max-h-80 overflow-y-auto">
+              {isVoiceChatActive && (
+                <div className="p-4 text-gray-500 text-center bg-gray-50 border-b">
+                  <div className="text-sm">⏸️ Notifications paused during voice chat</div>
+                </div>
+              )}
               {notificationList.length === 0 ? (
                 <div className="p-4 text-gray-500 text-center">No notifications</div>
               ) : (
