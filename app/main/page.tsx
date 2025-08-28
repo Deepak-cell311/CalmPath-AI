@@ -96,6 +96,8 @@ export default function PatientInterface() {
   const breathingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const [voiceChatMode, setVoiceChatMode] = useState(false)
   const [patientId, setPatientId] = useState<number | null>(null)
+  const [isIOS, setIsIOS] = useState(false)
+  const [isSafari, setIsSafari] = useState(false)
   const lastHeardRef = useRef(Date.now())
   const restartTimeout = useRef<NodeJS.Timeout | null>(null)
   const [speechSynthesisSupported, setSpeechSynthesisSupported] = useState(false)
@@ -181,8 +183,18 @@ export default function PatientInterface() {
     { name: "Memories", icon: Camera },
   ]
 
-  // Check for Speech Recognition support
+  // Check for Speech Recognition support and detect iOS/Safari
   useEffect(() => {
+    // Detect iOS/Safari
+    const detectedIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    const detectedSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+    
+    setIsIOS(detectedIOS)
+    setIsSafari(detectedSafari)
+    
+    console.log("Browser detection:", { iOS: detectedIOS, Safari: detectedSafari })
+    
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (SpeechRecognition) {
       setSpeechSupported(true)
@@ -292,6 +304,13 @@ export default function PatientInterface() {
     recognitionRef.current.interimResults = true
     recognitionRef.current.lang = "en-US"
     recognitionRef.current.maxAlternatives = 3 // Increased alternatives for better accuracy
+    
+    // iOS/Safari specific settings
+    if (recognitionRef.current.webkitSpeechRecognition) {
+      recognitionRef.current.continuous = false // iOS works better with continuous=false
+      recognitionRef.current.interimResults = false // iOS works better with interimResults=false
+    }
+    
     // Don't set grammars - let it use default behavior for any speech
 
     recognitionRef.current.onstart = () => {
@@ -408,13 +427,36 @@ export default function PatientInterface() {
       // Request microphone permission explicitly for iOS/iPhone
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         console.log("[SR] Requesting microphone permission...")
-        await navigator.mediaDevices.getUserMedia({ 
+        
+        // iOS/Safari specific audio constraints
+        const audioConstraints = {
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true
+            autoGainControl: true,
+            // iOS specific settings
+            sampleRate: 44100,
+            channelCount: 1
           } 
-        })
+        }
+        
+        // Check if we're on iOS/Safari
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+        
+        if (isIOS || isSafari) {
+          console.log("[SR] iOS/Safari detected, using simplified audio constraints")
+          audioConstraints.audio = { 
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 44100,
+            channelCount: 1
+          }
+        }
+        
+        await navigator.mediaDevices.getUserMedia(audioConstraints)
         console.log("[SR] Microphone permission granted")
       }
       // If recognition is already running, stop it first, then start after a short delay
@@ -435,10 +477,30 @@ export default function PatientInterface() {
       console.log("[SR] startListening completed")
     } catch (error: any) {
       console.error("Error starting speech recognition:", error)
+      
+      // Check if we're on iOS/Safari
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+      
       if (error.name === "NotAllowedError") {
-        addErrorMessage(
-          "Microphone access denied. Please allow microphone access in your browser settings and try again.",
-        )
+        if (isIOS || isSafari) {
+          addErrorMessage(
+            "Microphone access denied. On iOS/Safari, please: 1) Tap 'Allow' when prompted, 2) Go to Settings > Safari > Microphone and ensure it's enabled, 3) Try again.",
+          )
+        } else {
+          addErrorMessage(
+            "Microphone access denied. Please allow microphone access in your browser settings and try again.",
+          )
+        }
+      } else if (error.name === "NotSupportedError") {
+        if (isIOS || isSafari) {
+          addErrorMessage(
+            "Speech recognition not supported. On iOS/Safari, please use the text input option or try a different browser.",
+          )
+        } else {
+          addErrorMessage("Speech recognition not supported in this browser. Please use text input.")
+        }
       } else {
         addErrorMessage("Unable to start listening. Please try again or use text input.")
       }
@@ -1270,7 +1332,9 @@ export default function PatientInterface() {
           </div>
           <p className="text-lg font-medium mb-2">
             {!speechSupported
-              ? "Speech not supported - use text below"
+              ? isIOS || isSafari 
+                ? "iOS/Safari: Use text input below (speech recognition limited)"
+                : "Speech not supported - use text below"
               : voiceChatMode
                 ? isListening
                   ? "Listening… Speak now!"
@@ -1279,7 +1343,12 @@ export default function PatientInterface() {
                   ? "Speaking... Tap to stop and send"
                   : "Tap to start voice chat"}
           </p>
-          <p className="text-gray-600 text-sm">One tap to start session, one tap to stop</p>
+          <p className="text-gray-600 text-sm">
+            {isIOS || isSafari 
+              ? "On iOS/Safari: Tap to request microphone permission, then speak"
+              : "One tap to start session, one tap to stop"
+            }
+          </p>
         </div>
 
                  {/* Real-time Speech Display */}

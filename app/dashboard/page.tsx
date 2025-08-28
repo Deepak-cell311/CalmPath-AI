@@ -4,7 +4,7 @@ import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw, Users, Activity, Calendar, CheckCircle, Loader2 } from "lucide-react";
+import { RefreshCw, Users, Activity, Calendar, CheckCircle, Loader2, Menu } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { InviteUsageStats } from "@/components/InviteUsageStats";
@@ -22,6 +22,7 @@ export default function FacilityDashboard() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [patients, setPatients] = useState<any[]>([]);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
 
   const fetchDashboardData = async () => {
@@ -156,39 +157,76 @@ export default function FacilityDashboard() {
 
   return (
     <>
-      {/* Header */}
-      <header className="bg-white border-b px-6 py-4">
+      {/* Mobile-Friendly Header */}
+      <header className="bg-white border-b px-4 sm:px-6 py-3 sm:py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <SidebarTrigger />
+          {/* Logo and Title */}
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="hidden sm:block">
+              <SidebarTrigger />
+            </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Facility Dashboard</h1>
-              <p className="text-gray-600">Patient care management system</p>
+              <h1 className="text-lg sm:text-2xl font-bold text-gray-900">Facility Dashboard</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Patient care management system</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          
+          {/* Desktop Controls */}
+          <div className="hidden sm:flex items-center gap-4">
             <span className="text-sm text-gray-500">Last updated: {lastUpdated}</span>
             <Button onClick={handleRefresh} className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
               Refresh
             </Button>
           </div>
+
+          {/* Mobile Menu Button */}
+          <div className="sm:hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
+
+        {/* Mobile Menu Dropdown */}
+        {showMobileMenu && (
+          <div className="sm:hidden mt-3 pt-3 border-t border-gray-200">
+            <div className="flex flex-col gap-2">
+              <div className="text-xs text-gray-500">Last updated: {lastUpdated}</div>
+              <Button 
+                onClick={() => {
+                  handleRefresh();
+                  setShowMobileMenu(false);
+                }} 
+                className="flex items-center gap-2 w-full justify-start"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Refresh
+              </Button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
-      <main className="p-6">
-        {/* Status Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 mb-8">
+      <main className="p-4 sm:p-6">
+        {/* Status Cards - Mobile Responsive */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {statusCards.map((card, index) => (
             <Card key={index}>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">{card.title}</p>
-                    <p className="text-3xl font-bold text-gray-900">{isLoading ? <Loader2 className="w-8 h-8 animate-spin text-gray-400" /> : card.value}</p>
+                    <p className="text-xs sm:text-sm font-medium text-gray-600 mb-1">{card.title}</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                      {isLoading ? <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-400" /> : card.value}
+                    </p>
                   </div>
-                  <card.icon className={`w-8 h-8 ${card.color}`} />
+                  <card.icon className={`w-6 h-6 sm:w-8 sm:h-8 ${card.color}`} />
                 </div>
               </CardContent>
             </Card>
@@ -203,19 +241,19 @@ export default function FacilityDashboard() {
         {/* Patient Activity Monitor */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Patient Activity Monitor</CardTitle>
-              <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <CardTitle className="text-lg sm:text-xl">Patient Activity Monitor</CardTitle>
+              <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full"></div>
                   <span>Active</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 bg-yellow-500 rounded-full"></div>
                   <span>Scheduled</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <div className="w-2 h-2 sm:w-3 sm:h-3 bg-gray-500 rounded-full"></div>
                   <span>Offline</span>
                 </div>
               </div>
@@ -223,21 +261,22 @@ export default function FacilityDashboard() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-4" />
+              <div className="text-center py-8 sm:py-12">
+                <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-gray-400 mx-auto mb-4" />
               </div>
             ) : filteredPatients.length === 0 ? (
-              <div className="text-center py-12">
-                <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No patients found</h3>
-                <p className="text-gray-600 mb-4">No patients are currently registered in the system.</p>
+              <div className="text-center py-8 sm:py-12">
+                <Users className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">No patients found</h3>
+                <p className="text-sm text-gray-600 mb-4">No patients are currently registered in the system.</p>
                 <Button asChild>
                   <a href="/dashboard/patients">Manage Patients</a>
                 </Button>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                {/* Desktop Table */}
+                <table className="hidden sm:table min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr>
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
@@ -247,13 +286,7 @@ export default function FacilityDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {isLoading ? (
-                      <tr>
-                        <td colSpan={4} className="px-4 py-2 text-center">
-                          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-                        </td>
-                      </tr>
-                    ) : filteredPatients.map((p) => (
+                    {filteredPatients.map((p) => (
                       <tr key={p.id}>
                         <td className="px-4 py-2 whitespace-nowrap">{p.firstName} {p.lastName}</td>
                         <td className="px-4 py-2 whitespace-nowrap">
@@ -271,6 +304,30 @@ export default function FacilityDashboard() {
                     ))}
                   </tbody>
                 </table>
+
+                {/* Mobile Cards */}
+                <div className="sm:hidden space-y-3">
+                  {filteredPatients.map((p) => (
+                    <Card key={p.id} className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-medium text-gray-900">{p.firstName} {p.lastName}</h3>
+                          <span className={`px-2 py-1 text-xs rounded-full ${
+                            p.type === 'family_member' 
+                              ? 'bg-blue-100 text-blue-800' 
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {p.type === 'family_member' ? 'Family Member' : 'Patient'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm text-gray-600">
+                          <span>Status: {p.status}</span>
+                          <span>Room: {p.roomNumber || '-'}</span>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>
