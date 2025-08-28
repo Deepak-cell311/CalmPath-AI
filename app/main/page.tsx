@@ -195,20 +195,15 @@ export default function PatientInterface() {
     
     console.log("Browser detection:", { iOS: detectedIOS, Safari: detectedSafari })
     
-    // iOS Safari has very limited speech recognition support
-    if (detectedIOS && detectedSafari) {
-      console.log("iOS Safari detected - speech recognition will be limited")
-      setSpeechSupported(false) // Disable speech recognition on iOS Safari
-      setShowTextInput(true) // Show text input by default
+    // Try to enable speech recognition for all browsers including iOS Safari
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (SpeechRecognition) {
+      console.log("Speech Recognition available - enabling for all browsers")
+      setSpeechSupported(true)
+      initializeSpeechRecognition()
     } else {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-      if (SpeechRecognition) {
-        setSpeechSupported(true)
-        initializeSpeechRecognition()
-      } else {
-        setSpeechSupported(false)
-        console.log("Speech Recognition not supported")
-      }
+      console.log("Speech Recognition not supported")
+      setSpeechSupported(false)
     }
   }, [voiceChatMode])
 
@@ -312,8 +307,9 @@ export default function PatientInterface() {
     recognitionRef.current.lang = "en-US"
     recognitionRef.current.maxAlternatives = 3 // Increased alternatives for better accuracy
     
-    // iOS/Safari specific settings
-    if (recognitionRef.current.webkitSpeechRecognition) {
+    // iOS/Safari specific settings for better compatibility
+    if (isIOS || isSafari) {
+      console.log("[SR] iOS/Safari detected - using optimized settings")
       recognitionRef.current.continuous = false // iOS works better with continuous=false
       recognitionRef.current.interimResults = false // iOS works better with interimResults=false
     }
@@ -1289,23 +1285,13 @@ export default function PatientInterface() {
              <Shield className="h-4 w-4" />
              <AlertDescription>
                <div className="space-y-2">
-                 <p className="font-medium">
-                   {isIOS && isSafari 
-                     ? "iOS Safari detected - Voice input not available"
-                     : "Speech recognition not available"
-                   }
-                 </p>
+                 <p className="font-medium">Speech recognition not available</p>
                  <p className="text-sm">
-                   {isIOS && isSafari 
-                     ? "iOS Safari has limited speech recognition support. Please use the text input below to communicate with CalmPath."
-                     : "Your browser doesn't support speech recognition. You can still use text input to communicate."
-                   }
+                   Your browser doesn't support speech recognition. You can still use text input to communicate.
                  </p>
-                 {!isIOS || !isSafari ? (
-                   <Button onClick={() => setShowTextInput(true)} size="sm" className="mt-2">
-                     Use Text Input
-                   </Button>
-                 ) : null}
+                 <Button onClick={() => setShowTextInput(true)} size="sm" className="mt-2">
+                   Use Text Input
+                 </Button>
                </div>
              </AlertDescription>
            </Alert>
@@ -1349,9 +1335,7 @@ export default function PatientInterface() {
           </div>
                      <p className="text-lg font-medium mb-2">
              {!speechSupported
-               ? isIOS && isSafari 
-                 ? "iOS Safari: Use text input below"
-                 : "Speech not supported - use text below"
+               ? "Speech not supported - use text below"
                : voiceChatMode
                  ? isListening
                    ? "Listening… Speak now!"
@@ -1361,11 +1345,9 @@ export default function PatientInterface() {
                    : "Tap to start voice chat"}
            </p>
                      <p className="text-gray-600 text-sm">
-             {isIOS && isSafari 
-               ? "Voice input not available on iOS Safari - use text input below"
-               : isIOS || isSafari 
-                 ? "On iOS/Safari: Tap to request microphone permission, then speak"
-                 : "One tap to start session, one tap to stop"
+             {isIOS || isSafari 
+               ? "On iOS/Safari: Tap to request microphone permission, then speak"
+               : "One tap to start session, one tap to stop"
              }
            </p>
         </div>
@@ -1406,7 +1388,7 @@ export default function PatientInterface() {
          )}
 
                  {/* Text Input Alternative */}
-         {(showTextInput || !speechSupported || (isIOS && isSafari)) && (
+         {(showTextInput || !speechSupported) && (
           <div className="mb-8 p-4 bg-blue-50 rounded-lg border">
             <div className="flex items-center gap-2 mb-3">
               <Type className="w-5 h-5 text-blue-600" />
