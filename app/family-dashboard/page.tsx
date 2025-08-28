@@ -20,7 +20,7 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import { Heart, Camera, MessageCircle, Bell, User, LogOut, Plus, Upload, X, Tag, CreditCard, RefreshCw } from "lucide-react"
+import { Heart, Camera, MessageCircle, Bell, User, LogOut, Plus, Upload, X, Tag, CreditCard, RefreshCw, Menu } from "lucide-react"
 import { useAuthRedirect } from "@/hooks/use-auth-redirect";
 import { toast } from "@/hooks/use-toast";
 
@@ -112,6 +112,7 @@ export default function FamilyDashboard() {
     const [notifiedReminders, setNotifiedReminders] = useState<number[]>([]);
     const [notificationList, setNotificationList] = useState<{ id: number, message: string, time: string, seen: boolean }[]>([]);
     const [showNotifications, setShowNotifications] = useState(false);
+    const [showMobileMenu, setShowMobileMenu] = useState(false);
 
     // New state variables for payment status tracking
     const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
@@ -1106,61 +1107,24 @@ export default function FamilyDashboard() {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            {/* Header */}
-            <header className="bg-white border-b px-6 py-4">
+            {/* Mobile-Friendly Header */}
+            <header className="bg-white border-b px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Heart className="w-8 h-8 text-blue-600 fill-blue-600" />
-                        <div>
-                            <h1 className="text-2xl font-bold text-gray-900">CalmPath Family</h1>
-                            <p className="text-gray-600">Care Dashboard</p>
+                    {/* Logo and Title */}
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <Heart className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 fill-blue-600" />
+                        <div className="hidden sm:block">
+                            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">CalmPath Family</h1>
+                            <p className="text-sm text-gray-600">Care Dashboard</p>
+                        </div>
+                        <div className="sm:hidden">
+                            <h1 className="text-lg font-bold text-gray-900">CalmPath</h1>
+                            <p className="text-xs text-gray-600">Family</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                        {/* <div className="relative">
-                            <button
-                                className="relative focus:outline-none"
-                                onClick={() => {
-                                    setShowNotifications((prev) => !prev);
-                                    // Mark all as seen when opening
-                                    setNotificationList((prev) => prev.map(n => ({ ...n, seen: true })));
-                                }}
-                            >
-                                <Bell className="w-5 h-5 text-gray-400" />
-                                {notificationList.filter(n => !n.seen).length > 0 && (
-                                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                                        {notificationList.filter(n => !n.seen).length}
-                                    </span>
-                                )}
-                            </button>
-                            {showNotifications && (
-                                <div className="absolute right-0 mt-2 w-80 bg-white border rounded-lg shadow-lg z-50">
-                                    <div className="flex items-center justify-between px-4 py-2 border-b">
-                                        <span className="font-semibold">Notifications</span>
-                                        <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600">
-                                            <span className="sr-only">Close</span>
-                                            &#10005;
-                                        </button>
-                                    </div>
-                                    <div className="max-h-80 overflow-y-auto">
-                                        {notificationList.length === 0 ? (
-                                            <div className="p-4 text-gray-500 text-center">No notifications</div>
-                                        ) : (
-                                            notificationList.map((n) => (
-                                                <div
-                                                    key={n.id}
-                                                    className={`px-4 py-3 border-b last:border-b-0 ${n.seen ? 'bg-gray-100 text-gray-800 opacity-100' : 'bg-blue-50 text-blue-900 font-semibold'}`}
-                                                    style={n.seen ? { filter: 'blur(0.5px)' } : {}}
-                                                >
-                                                    <div className="text-sm">{n.message}</div>
-                                                    <div className="text-xs mt-1">{new Date(n.time).toLocaleString()}</div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div> */}
+                    
+                    {/* Desktop Navigation */}
+                    <div className="hidden sm:flex items-center gap-4">
                         <Button 
                             variant="ghost" 
                             size="sm"
@@ -1177,37 +1141,92 @@ export default function FamilyDashboard() {
                             <LogOut className="w-4 h-4" />
                         </Button>
                     </div>
+
+                    {/* Mobile Menu Button */}
+                    <div className="sm:hidden">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowMobileMenu(!showMobileMenu)}
+                        >
+                            <Menu className="w-5 h-5" />
+                        </Button>
+                    </div>
                 </div>
+
+                {/* Mobile Menu Dropdown */}
+                {showMobileMenu && (
+                    <div className="sm:hidden mt-3 pt-3 border-t border-gray-200">
+                        <div className="flex flex-col gap-2">
+                            <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => {
+                                    window.location.href = '/main';
+                                    setShowMobileMenu(false);
+                                }}
+                                className="justify-start"
+                            >
+                                <MessageCircle className="w-4 h-4 mr-2" />
+                                App
+                            </Button>
+                            <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="justify-start"
+                            >
+                                <User className="w-4 h-4 mr-2" />
+                                {user?.firstName} {user?.lastName}
+                            </Button>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => {
+                                    handleLogout();
+                                    setShowMobileMenu(false);
+                                }}
+                                className="justify-start"
+                            >
+                                <LogOut className="w-4 h-4 mr-2" />
+                                Logout
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </header>
 
             {/* Main Content */}
-            <main className="p-6">
+            <main className="p-4 sm:p-6">
                 <div className="max-w-6xl mx-auto">
-                    <Tabs defaultValue="overview" className="space-y-6">
-                        <TabsList className="grid w-full grid-cols-5">
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
-                            <TabsTrigger value="photos">Memory Photos</TabsTrigger>
-                            <TabsTrigger value="medications">Medications</TabsTrigger>
-                            <TabsTrigger value="personal-info">Personal Info</TabsTrigger>
-                            <TabsTrigger value="billing">Billing</TabsTrigger>
-                        </TabsList>
+                    <Tabs defaultValue="overview" className="space-y-4 sm:space-y-6">
+                        {/* Mobile-Friendly Tabs */}
+                        <div className="overflow-x-auto">
+                            <TabsList className="grid w-full grid-cols-5 min-w-[500px] sm:min-w-0">
+                                <TabsTrigger value="overview" className="text-xs sm:text-sm px-2 sm:px-3">Overview</TabsTrigger>
+                                <TabsTrigger value="photos" className="text-xs sm:text-sm px-2 sm:px-3">Photos</TabsTrigger>
+                                <TabsTrigger value="medications" className="text-xs sm:text-sm px-2 sm:px-3">Reminders</TabsTrigger>
+                                <TabsTrigger value="personal-info" className="text-xs sm:text-sm px-2 sm:px-3">Personal</TabsTrigger>
+                                <TabsTrigger value="billing" className="text-xs sm:text-sm px-2 sm:px-3">Billing</TabsTrigger>
+                            </TabsList>
+                        </div>
 
-                        <TabsContent value="overview" className="space-y-6">
+                        <TabsContent value="overview" className="space-y-4 sm:space-y-6">
                             {/* Header with refresh button */}
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <h2 className="text-lg font-semibold">Dashboard Overview</h2>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={fetchDashboardData}
-                                    className="flex items-center gap-2"
+                                    className="flex items-center gap-2 w-full sm:w-auto"
                                 >
                                     <RefreshCw className="w-4 h-4" />
                                     Refresh
                                 </Button>
                             </div>
-                            {/* Status Cards */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            
+                            {/* Status Cards - Mobile Responsive */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                 <Card>
                                     <CardHeader className="pb-2">
                                         <CardTitle className="text-sm font-medium">Today's Sessions</CardTitle>
@@ -1229,6 +1248,7 @@ export default function FamilyDashboard() {
                                     </CardContent>
                                 </Card>
                             </div>
+                            
                             {/* Recent Activity */}
                             <Card>
                                 <CardHeader>
@@ -1239,17 +1259,17 @@ export default function FamilyDashboard() {
                                     <div className="space-y-4">
                                         {dashboardData.recentActivity.length > 0 ? (
                                             dashboardData.recentActivity.map((activity: any, index: number) => (
-                                                <div key={activity.id || index} className={`flex items-center gap-4 p-3 rounded-lg ${
+                                                <div key={activity.id || index} className={`flex items-center gap-3 sm:gap-4 p-3 rounded-lg ${
                                                     activity.type === 'conversation' ? 'bg-blue-50' : 'bg-green-50'
                                                 }`}>
                                                     {activity.type === 'conversation' ? (
-                                                        <MessageCircle className="w-5 h-5 text-blue-600" />
+                                                        <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
                                                     ) : (
-                                                        <Camera className="w-5 h-5 text-green-600" />
+                                                        <Camera className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
                                                     )}
-                                                    <div className="flex-1">
-                                                        <p className="font-medium">{activity.title}</p>
-                                                        <p className="text-sm text-gray-600">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-sm sm:text-base truncate">{activity.title}</p>
+                                                        <p className="text-xs sm:text-sm text-gray-600">
                                                             {new Date(activity.timestamp).toLocaleString()} 
                                                             {activity.type === 'conversation' && activity.sentiment && ` • Mood: ${activity.sentiment}`}
                                                             {activity.type === 'photo_triggered' && activity.photoName && ` • "${activity.photoName}" shown`}
@@ -1267,10 +1287,10 @@ export default function FamilyDashboard() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="photos" className="space-y-6">
+                        <TabsContent value="photos" className="space-y-4 sm:space-y-6">
                             <Card>
                                 <CardHeader>
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                         <div>
                                             <CardTitle>Memory Photos</CardTitle>
                                             <CardDescription>Upload and manage photos with context for AI memory recall</CardDescription>
@@ -1379,7 +1399,7 @@ export default function FamilyDashboard() {
                                     </div>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {photos.map((photo) => (
                                             <Card key={photo.id} className="overflow-hidden">
                                                 <div className="aspect-video bg-gray-100 relative">
@@ -1430,7 +1450,7 @@ export default function FamilyDashboard() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="medications" className="space-y-6">
+                        <TabsContent value="medications" className="space-y-4 sm:space-y-6">
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Reminders</CardTitle>
@@ -1441,7 +1461,7 @@ export default function FamilyDashboard() {
                                 <CardContent>
                                     <div className="space-y-4">
                                         {/* Add Reminder */}
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                             <div>
                                                 <Label htmlFor="reminder-message">Reminder Message</Label>
                                                 <Input
@@ -1494,7 +1514,7 @@ export default function FamilyDashboard() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="personal-info" className="space-y-6">
+                        <TabsContent value="personal-info" className="space-y-4 sm:space-y-6">
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="flex items-center gap-2">
@@ -1606,7 +1626,7 @@ export default function FamilyDashboard() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="billing" className="max-w-6xl mx-auto">
+                        <TabsContent value="billing" className="space-y-4 sm:space-y-6">
                             <Card>
                                 <CardHeader className="text-center">
                                     <CardTitle className="flex items-center justify-center gap-2">
@@ -1618,7 +1638,7 @@ export default function FamilyDashboard() {
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
                                         {/* Left Side - Info Section */}
                                         <div className="space-y-6">
                                             <h3 className="text-lg font-semibold text-gray-900 border-b pb-2">Your Account Info</h3>
